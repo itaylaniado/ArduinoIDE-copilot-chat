@@ -11,7 +11,7 @@ import { extractImageAttributes } from '../../../util/common/imageUtils';
 import * as path from '../../../util/vs/base/common/path';
 import { Intent } from '../../common/constants';
 
-class AICodeAction extends vscode.CodeAction {
+class AICodeAction extends ((vscode.CodeAction as any) || class {}) {
 	override readonly isAI = true;
 }
 

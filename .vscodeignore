@@ -18,6 +18,8 @@ assets/walkthroughs/**
 !dist/copilotCLIShim.js
 !dist/cli.js
 !dist/suggestionsPanelWebview.js
+!dist/main.css
+!dist/main.js
 !node_modules/@vscode/copilot-typescript-server-plugin/package.json
 !node_modules/@vscode/copilot-typescript-server-plugin/dist/*.js
 node_modules/@github/copilot/index.js
@@ -39,3 +41,4 @@ node_modules/@github/copilot/sharp/**
 !l10n/bundle.l10n.*.json
 !ThirdPartyNotices.txt
 !LICENSE.txt
+!src/extension/arduino/webview/**

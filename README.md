@@ -1,100 +1,155 @@
-> [!IMPORTANT]
-> This project has been moved into the main VS Code repository and this repository is now archived.
->
-> Active development continues at:
-> https://github.com/microsoft/vscode
->
-> Please open issues and pull requests in the VS Code repository instead.
+# Arduino IDE Copilot Chat
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE.txt)
+[![Arduino IDE 2.x](https://img.shields.io/badge/Arduino%20IDE-2.x%20(Theia)-00979C.svg)](https://www.arduino.cc/en/software)
+[![GitHub Copilot](https://img.shields.io/badge/GitHub-Copilot%20Enabled-orange.svg)](https://github.com/features/copilot)
+
+An autonomous AI peer programming and chat extension for **Arduino IDE 2.x**, powered by GitHub Copilot and customized specifically for embedded systems, microcontrollers, and physical computing.
 
 ---
 
-# GitHub Copilot - Your autonomous AI peer programmer
+## Why Arduino Copilot Chat?
 
-**[GitHub Copilot](https://code.visualstudio.com/docs/copilot/overview)** is an AI peer programming tool that transforms how you write code in Visual Studio Code.
+Arduino IDE 2.x is built on Eclipse Theia and Electron. Because Theia implements a subset of Visual Studio Code's extension APIs, the official GitHub Copilot Chat extension fails to activate due to missing runtime services (`PowerStateLogger`, `TelemetryLogger`, `TerminalBufferListener`, `TabsAndEditorsService`, etc.).
 
-GitHub Copilot agents handle complete coding tasks end-to-end, autonomously planning work, editing files, running commands, and self-correcting when they hit errors. You can also leverage inline suggestions for quick coding assistance and inline chat for precise, focused edits directly in the editor.
+**Arduino IDE Copilot Chat** provides full compatibility shims for Theia while augmenting Copilot with deep, hardware-aware capabilities built around `arduino-cli` and physical microcontrollers.
 
-**Sign up for [GitHub Copilot Free](https://github.com/settings/copilot?utm_source=vscode-chat-readme&utm_medium=first&utm_campaign=2025mar-em-MSFT-signup)!**
+---
 
-![Working with GitHub Copilot agent mode to make edits to code in your workspace](https://github.com/microsoft/vscode-docs/raw/732b9599e49ee7034744a3e5b0485b7fb4bdf530/docs/copilot/images/getting-started/custom-reviewer-mode.png)
+## Key Features
 
+### 1. Real-Time Board Synchronization
+- **Live IDE Dropdown Sync**: Hooks directly into Arduino IDE 2.x's internal API (`dankeboy36.vscode-arduino-api`). When you change your target board in the top toolbar dropdown (e.g. from *Arduino Uno* to *ESP32 Dev Module* or *Arduino Uno R4 WiFi*), Copilot instantly updates its hardware context in real time.
+- **`sketch.yaml` Support**: Automatically detects board profiles and configurations defined in your sketch directory.
+- **Interactive Board Selector**: Click the active board chip in the chat header to open a QuickPick menu listing:
+  - Physically connected USB microcontrollers with their COM/serial ports
+  - All installed cores from the Arduino Boards Manager
+  - Popular microcontroller presets (ESP32-S3, ESP32-C3, Pico, Uno R4, Nano, Mega, etc.)
+- **Chat Intent Switching**: Type natural commands like `"set board to esp32-s3"`, `"switch board to uno r4 wifi"`, or `"use board pico"`.
+- **Hardware-Aware Prompting**: Automatically informs GPT-4o of the active board's architecture, CPU clock speed, operating logic level (3.3V vs 5.0V), flash memory, dynamic SRAM limits, and pin constraints.
 
-## Getting access to GitHub Copilot
+### 2. Direct Code Editing with Instant Rollback
+- **In-Place File Modifications**: Instead of just printing suggested code blocks for manual copy-pasting, Copilot can directly modify active sketch files (`.ino`, `.cpp`, `.h`).
+- **Standard IDE Undo**: Uses `vscode.WorkspaceEdit` so edits seamlessly integrate into the IDE's native Undo stack (`Cmd+Z` / `Ctrl+Z`).
+- **One-Click Revert**: Every AI-applied edit renders an interactive card in chat with an **[↩ Revert Edit]** button for instant rollback.
 
-Sign up for [GitHub Copilot Free](https://github.com/settings/copilot?utm_source=vscode-chat-readme&utm_medium=second&utm_campaign=2025mar-em-MSFT-signup), or request access from your enterprise admin.
+### 3. Automated Compile & Fix Loop
+- **⚡ Verify & Compile**: Invokes the bundled or system `arduino-cli` backend to verify and compile your sketch, reporting program storage (Flash) and dynamic memory (RAM) usage.
+- **🛠️ Fix Errors**: Parses compiler diagnostics and line numbers, invokes Copilot with tool calling (`edit_sketch_file`), applies the fix directly to your sketch tabs, and automatically re-compiles with `arduino-cli` to verify the build succeeds.
 
-To access GitHub Copilot, an active GitHub Copilot subscription is required. You can read more about our business and individual offerings at [github.com/features/copilot](https://github.com/features/copilot?utm_source=vscode-chat&utm_medium=readme&utm_campaign=2025mar-em-MSFT-signup).
+### 4. Physical Computing & Embedded Utilities
+- **📌 Check Pinout**: Validates PWM, analog input, external interrupt, I2C, and SPI pin capabilities against the active board's hardware layout (e.g. warning if connecting 5V signals to 3.3V GPIOs on ESP32 or RP2040).
+- **🔌 Wire Component**: Generates ASCII circuit schematics, pinout connection tables, resistor calculations, and electrical safety notes for sensors, actuators, and displays.
+- **🚀 Upload Sketch**: Initiates uploads to connected microcontrollers over serial/USB with actionable bootloader troubleshooting guidance.
+- **Serial Crash Decoder**: Diagnoses ESP32 Guru Meditation Error stack traces and detects baud rate mismatches between your sketch `Serial.begin(...)` and the Serial Monitor.
 
-## Build with autonomous agents
+### 5. Native Chat Experience
+- **Arduino Themed UI**: Dark-mode interface designed with official Arduino teal and charcoal styling.
+- **Clipboard Support**: Full keyboard shortcut support (`Cmd+C`, `Cmd+V`, `Cmd+A`) and native context-menu paste within Electron webviews.
+- **Code Block Actions**: Syntax-highlighted code blocks with dedicated **Copy** and **Apply to Sketch** buttons.
+- **Device Flow & Token Sharing**: Reads existing local Copilot credentials from `~/.config/github-copilot/apps.json` or provides standard GitHub OAuth Device Flow authentication directly in the panel.
 
-**Let AI agents implement complex features end-to-end**. Give an agent a high-level task and it breaks the work into steps, edits multiple files, runs terminal commands, and self-corrects when it hits errors or failing tests. Agents excel at [building new features](https://code.visualstudio.com/docs/copilot/agents/overview), [debugging and fixing failing tests](https://code.visualstudio.com/docs/copilot/guides/debug-with-copilot), refactoring codebases, and [collaborating via pull requests](https://code.visualstudio.com/docs/copilot/agents/cloud-agents).
+---
 
-**Manage sessions from a central view.** Run multiple [agent sessions](https://code.visualstudio.com/docs/copilot/chat/chat-sessions) in parallel and track them in one place. Monitor session status, switch between active work, review file changes, and resume where you left off.
+## Architecture
 
-**Run agents with your preferred harness.** Use agents locally in VS Code, in the background via Copilot CLI, or Cloud via Copilot Coding Agent. You can also work with providers like Claude and Codex, and hand tasks off between agent types with context preserved all within the VS Code.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       Arduino IDE 2.x                       │
+│  ┌───────────────────────┐       ┌───────────────────────┐  │
+│  │  Board Dropdown /     │       │  Active Sketch Editor │  │
+│  │  vscode-arduino-api   │       │  (.ino, .cpp, .h)     │  │
+│  └───────────┬───────────┘       └───────────▲───────────┘  │
+└──────────────┼───────────────────────────────┼──────────────┘
+               │ onDidChange('fqbn')           │ applyFileEdit
+┌──────────────▼───────────────────────────────┴──────────────┐
+│                  Arduino Copilot Extension                  │
+│                                                             │
+│   ┌─────────────────────────┐   ┌───────────────────────┐   │
+│   │   BoardContextService   │   │     SketchService     │   │
+│   │ (Hardware profiles,     │   │ (Tab manager, AST,    │   │
+│   │  pinouts & constraints) │   │  revert history)      │   │
+│   └───────────┬─────────────┘   └───────────▲───────────┘   │
+│               │                             │               │
+│   ┌───────────▼─────────────────────────────┴───────────┐   │
+│   │                 CopilotCliAgentBridge               │   │
+│   │   (System prompt assembly, tool dispatch loop)      │   │
+│   └───────────┬─────────────────────────────▲───────────┘   │
+│               │                             │               │
+│   ┌───────────▼─────────────┐   ┌───────────┴───────────┐   │
+│   │    ArduinoCliService    │   │   CopilotApiService   │   │
+│   │  (compile, upload,      │   │ (OAuth token cache,   │   │
+│   │   board details)        │   │  GPT-4o SSE streaming)│   │
+│   └─────────────────────────┘   └───────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
 
-![Video showing an agent session building a complete feature in VS Code.](https://github.com/microsoft/vscode-docs/raw/refs/heads/main/docs/copilot/images/overview/agents-intro.gif)
+---
 
-**Use agents to [plan before you build](https://code.visualstudio.com/docs/copilot/agents/planning) with the Plan agent**, which breaks tasks into structured implementation plans and asks clarifying questions. When your plan is ready, hand it off to an implementation agent to execute it. You can also [delegate tasks to cloud agents](https://code.visualstudio.com/docs/copilot/agents/cloud-agents) that create branches, implement changes, and open pull requests for your team to review.
+## Getting Started
 
-## More ways to code with AI
+### Prerequisites
+- [Arduino IDE 2.x](https://www.arduino.cc/en/software) (version 2.2.0 or newer)
+- Node.js (v20+ or v22+)
+- An active [GitHub Copilot](https://github.com/features/copilot) subscription (Individual, Business, or Enterprise)
 
-**Receive intelligent inline suggestions** as you type with [ghost text suggestions](https://aka.ms/vscode-completions) and [next edit suggestions](https://aka.ms/vscode-nes), helping you write code faster. Copilot predicts your next logical change, and you can accept suggestions with the Tab key.
+### Installation
 
-![Video showing Copilot next edit suggestions.](https://github.com/microsoft/vscode-docs/raw/refs/heads/main/docs/copilot/images/inline-suggestions/nes-video.gif)
+#### Option A: Direct Deployment to Arduino IDE (Development)
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/itaylaniado/ArduinoIDE-copilot-chat.git
+   cd ArduinoIDE-copilot-chat
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Compile the extension bundle:
+   ```bash
+   npx tsx .esbuild.ts --dev
+   ```
+4. Copy the compiled distribution to Arduino IDE's plugin directory:
+   ```bash
+   mkdir -p ~/.arduinoIDE/deployedPlugins/copilot-chat-0.44.0/extension/dist
+   cp dist/extension.js dist/main.css dist/main.js ~/.arduinoIDE/deployedPlugins/copilot-chat-0.44.0/extension/dist/
+   ```
+5. Restart Arduino IDE 2.x. Open the **Arduino Copilot** view in the sidebar.
 
-**Use inline chat for targeted edits** by pressing `Ctrl+I`/`Cmd+I` to open a chat prompt directly in the editor. Describe a change and Copilot suggests edits in place for refactoring methods, adding error handling, or explaining complex algorithms without leaving your editor.
+#### Option B: Build VSIX Package
+```bash
+npm run compile
+npx @vscode/vsce package --no-dependencies
+```
+Install the resulting `.vsix` into Arduino IDE via `Cmd+Shift+P` $\rightarrow$ **Extensions: Install from VSIX...**.
 
-![Inline chat in VS Code](https://code.visualstudio.com/assets/docs/copilot/copilot-chat/inline-chat-question-example.png)
+---
 
+## Running Tests
 
-## Customize AI for your workflow
+Run the standalone pure test suite:
+```bash
+node src/extension/arduino/test/verifyPure.mjs
+```
 
-**Agents work best when they understand your project's conventions and have the right tools**. Tailor Copilot so it generates code that fits your codebase from the start.
+The test suite covers:
+- Arduino pinout and voltage logic level verification
+- Sketch memory optimization heuristics (AVR `F()` macro, blocking `delay()`, ISR `volatile`)
+- Serial monitor crash dump parsing (ESP32 Guru Meditation) and baud rate detection
+- Compiler error diagnostic parsing
+- GitHub Copilot authentication and token persistence
+- Direct code editing, streaming tool delta accumulation, and revert rollback
+- `sketch.yaml` profile parsing and dynamic FQBN resolution
 
-**Project context.** Use [custom instructions](https://code.visualstudio.com/docs/copilot/customization/custom-instructions) to specify project-wide or task-specific context and coding guidelines.
+---
 
-**Add specialized capabilities**. Teach Copilot specialized capabilities with [agent skills](https://code.visualstudio.com/docs/copilot/customization/agent-skills) or define specialized personas with [custom agents](https://code.visualstudio.com/docs/copilot/customization/custom-agents).
+## Contributing
 
-**Connect to external tools and services**. Extend agents further with tools from [MCP servers](https://code.visualstudio.com/docs/copilot/customization/mcp-servers) and extensions to give Copilot a gateway to external data sources, APIs, or specialized tools.
+Contributions are welcome! Please feel free to submit issues or pull requests to help improve microcontroller workflows, add support for additional hardware cores, or refine error diagnosis routines.
 
-### Supported languages and frameworks
-
-GitHub Copilot works on any language, including Java, PHP, Python, JavaScript, Ruby, Go, C#, or C++. Because it’s been trained on languages in public repositories, it works for most popular languages, libraries and frameworks.
-
-### Version compatibility
-
-As Copilot Chat releases in lockstep with VS Code due to its deep UI integration, every new version of Copilot Chat is only compatible with the latest and newest release of VS Code. This means that if you are using an older version of VS Code, you will not be able to use the latest Copilot Chat.
-
-Only the latest Copilot Chat versions will use the latest models provided by the Copilot service, as even minor model upgrades require prompt changes and fixes in the extension.
-
-### Privacy and preview terms
-
-By using Copilot Chat you agree to [GitHub Copilot chat preview terms](https://docs.github.com/en/early-access/copilot/github-copilot-chat-technical-preview-license-terms). Review the [transparency note](https://aka.ms/CopilotChatTransparencyNote) to understand about usage, limitations and ways to improve Copilot Chat during the technical preview.
-
-Please refer to our [Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) to learn about the data we collect, how we use it, and the controls available to you.
-
-To get the latest security fixes, please use the latest version of the Copilot extension and VS Code.
-
-### Resources & next steps
-* **[Sign up for GitHub Copilot Free](https://github.com/settings/copilot?utm_source=vscode-chat-readme&utm_medium=third&utm_campaign=2025mar-em-MSFT-signup)**: Explore Copilot's AI capabilities at no cost before upgrading to a paid plan.
-   * If you're using Copilot for your business, check out [Copilot Business](https://docs.github.com/en/copilot/copilot-business/about-github-copilot-business) and [Copilot Enterprise](https://docs.github.com/en/copilot/github-copilot-enterprise/overview/about-github-copilot-enterprise).
-* **[Copilot Quickstart](https://code.visualstudio.com/docs/copilot/getting-started)**: Discover the key features of Copilot in VS Code.
-* **[Agents Tutorial](https://code.visualstudio.com/docs/copilot/agents/agents-tutorial)**: Get started with autonomous agents across different environments.
-* **[VS Code on YouTube](https://www.youtube.com/@code)**: Watch the latest demos and updates on the VS Code channel.
-* **[Frequently Asked Questions](https://code.visualstudio.com/docs/copilot/faq)**: Get answers to commonly asked questions about Copilot in VS Code.
-* **[Provide Feedback](https://github.com/microsoft/vscode-copilot-release/issues)**: Send us your feedback and feature request to help us make GitHub Copilot better!
-
-## Data and telemetry
-
-The GitHub Copilot Extension for Visual Studio Code collects usage data and sends it to Microsoft to help improve our products and services. Read our [privacy statement](https://privacy.microsoft.com/privacystatement) to learn more. This extension respects the `telemetry.telemetryLevel` setting which you can learn more about at https://code.visualstudio.com/docs/supporting/faq#_how-to-disable-telemetry-reporting.
-
-## Trademarks
-
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow Microsoft's Trademark & Brand Guidelines. Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.
+---
 
 ## License
 
-Copyright (c) Microsoft Corporation. All rights reserved.
-
-Licensed under the [MIT](LICENSE.txt) license.
+This project is licensed under the [MIT License](LICENSE.txt).
+Based on the VS Code Copilot Chat extension architecture. Copyright (c) Microsoft Corporation and Arduino Copilot Chat contributors.

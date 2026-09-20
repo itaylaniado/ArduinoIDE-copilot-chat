@@ -567,7 +567,7 @@ async function sendRawTelemetry(fetcher: IFetcher, envService: IEnvService, exte
 	const url = 'https://mobile.events.data.microsoft.com/OneCollector/1.0?cors=true&content-type=application/x-json-stream';
 	const product = require(path.join(vscode.env.appRoot, 'product.json'));
 	const vscodeCommitHash: string = product.commit || '';
-	const ariaKey = (extensionContext.extension.packageJSON as { ariaKey?: string }).ariaKey ?? '';
+	const ariaKey = ((extensionContext as any).extension?.packageJSON as { ariaKey?: string } | undefined)?.ariaKey ?? '';
 	const iKey = `o:${ariaKey.split('-')[0]}`;
 	const sdkVer = '1DS-Web-JS-4.3.10';
 	const eventTime = new Date(Date.now() - 10).toISOString();

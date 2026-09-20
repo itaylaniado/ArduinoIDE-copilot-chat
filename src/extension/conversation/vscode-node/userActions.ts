@@ -32,6 +32,19 @@ import { IFeedbackReporter } from '../../prompt/node/feedbackReporter';
 import { sendUserActionTelemetry } from '../../prompt/node/telemetry';
 import { resolveModelIdForTelemetry } from './resolveModelId';
 
+enum ChatEditingSessionActionOutcomeFallback {
+	Accepted = 1,
+	Rejected = 2,
+	Saved = 3
+}
+const ChatEditingSessionActionOutcome = (vscode as any).ChatEditingSessionActionOutcome ?? ChatEditingSessionActionOutcomeFallback;
+
+enum ChatResultFeedbackKindFallback {
+	Unhelpful = 0,
+	Helpful = 1
+}
+const ChatResultFeedbackKind = (vscode as any).ChatResultFeedbackKind ?? ChatResultFeedbackKindFallback;
+
 export const IUserFeedbackService = createServiceIdentifier<IUserFeedbackService>('IUserFeedbackService');
 export interface IUserFeedbackService {
 	_serviceBrand: undefined;
@@ -152,10 +165,10 @@ export class UserFeedbackService implements IUserFeedbackService {
 			case 'chatEditingSessionAction':
 				if (conversation instanceof Conversation) {
 					const editCodeStep = conversation.getLatestTurn().getMetadata(EditCodeStepTurnMetaData)?.value;
-					if (editCodeStep && (e.action.outcome === vscode.ChatEditingSessionActionOutcome.Accepted || e.action.outcome === vscode.ChatEditingSessionActionOutcome.Rejected)
+					if (editCodeStep && (e.action.outcome === ChatEditingSessionActionOutcome.Accepted || e.action.outcome === ChatEditingSessionActionOutcome.Rejected)
 					) {
 						editCodeStep.setWorkingSetEntryState(e.action.uri, {
-							accepted: e.action.outcome === vscode.ChatEditingSessionActionOutcome.Accepted,
+							accepted: e.action.outcome === ChatEditingSessionActionOutcome.Accepted,
 							hasRemainingEdits: e.action.hasRemainingEdits
 						});
 					}
@@ -215,18 +228,18 @@ export class UserFeedbackService implements IUserFeedbackService {
 						const otelOutcome = outcomes.get(e.action.outcome) ?? 'unknown';
 						const workspace = resolveWorkspaceOTelMetadata(this.gitService, e.action.uri);
 						emitEditFeedbackEvent(this.otelService, otelOutcome, document?.languageId ?? '', agentId, result.metadata?.responseId ?? '', 'agent', e.action.hasRemainingEdits, this.notebookService.hasSupportedNotebooks(e.action.uri), workspace);
-						if (e.action.outcome === vscode.ChatEditingSessionActionOutcome.Accepted
-							|| e.action.outcome === vscode.ChatEditingSessionActionOutcome.Rejected) {
+						if (e.action.outcome === ChatEditingSessionActionOutcome.Accepted
+							|| e.action.outcome === ChatEditingSessionActionOutcome.Rejected) {
 							GenAiMetrics.recordEditAcceptance(this.otelService, 'chat_editing', otelOutcome, document?.languageId);
 						}
 						GenAiMetrics.recordChatEditOutcome(this.otelService, 'chat_editing', otelOutcome, document?.languageId, e.action.hasRemainingEdits);
 					}
 
 					if (result.metadata?.responseId
-						&& (e.action.outcome === vscode.ChatEditingSessionActionOutcome.Accepted
-							|| e.action.outcome === vscode.ChatEditingSessionActionOutcome.Rejected)
+						&& (e.action.outcome === ChatEditingSessionActionOutcome.Accepted
+							|| e.action.outcome === ChatEditingSessionActionOutcome.Rejected)
 					) {
-						const outcome = e.action.outcome === vscode.ChatEditingSessionActionOutcome.Accepted ? 'accept' : 'reject';
+						const outcome = e.action.outcome === ChatEditingSessionActionOutcome.Accepted ? 'accept' : 'reject';
 						this.multiFileEditTelemetryService.sendEditPromptAndResult({ chatRequestId: result.metadata.responseId }, e.action.uri, outcome);
 					}
 				}
@@ -368,14 +381,14 @@ export class UserFeedbackService implements IUserFeedbackService {
 			command: result.metadata?.command,
 			conversationId: result.metadata?.sessionId
 		}, {
-			direction: e.kind === vscode.ChatResultFeedbackKind.Helpful ? 1 : 2, // map to previous enum values
+			direction: e.kind === ChatResultFeedbackKind.Helpful ? 1 : 2, // map to previous enum values
 		});
 
 		sendUserActionTelemetry(
 			this.telemetryService,
 			document,
 			{
-				rating: e.kind === vscode.ChatResultFeedbackKind.Helpful ? 'positive' : 'negative',
+				rating: e.kind === ChatResultFeedbackKind.Helpful ? 'positive' : 'negative',
 				messageId: result.metadata?.modelMessageId ?? '',
 				headerRequestId: result.metadata?.responseId ?? '',
 			},
@@ -383,7 +396,7 @@ export class UserFeedbackService implements IUserFeedbackService {
 			'conversation.messageRating'
 		);
 
-		const otelRating = e.kind === vscode.ChatResultFeedbackKind.Helpful ? 'positive' : 'negative';
+		const otelRating = e.kind === ChatResultFeedbackKind.Helpful ? 'positive' : 'negative';
 		emitUserFeedbackEvent(this.otelService, otelRating, agentId, result.metadata?.sessionId ?? '', result.metadata?.responseId ?? '');
 		GenAiMetrics.incrementUserFeedbackCount(this.otelService, otelRating);
 	}
@@ -593,7 +606,7 @@ function reportInlineEditSurvivalEvent(res: EditSurvivalResult, sharedProps: Tel
 }
 
 const outcomes = new Map<vscode.ChatEditingSessionActionOutcome, EditOutcome>([
-	[vscode.ChatEditingSessionActionOutcome.Accepted, 'accepted'],
-	[vscode.ChatEditingSessionActionOutcome.Rejected, 'rejected'],
-	[vscode.ChatEditingSessionActionOutcome.Saved, 'saved']
+	[ChatEditingSessionActionOutcome.Accepted, 'accepted'],
+	[ChatEditingSessionActionOutcome.Rejected, 'rejected'],
+	[ChatEditingSessionActionOutcome.Saved, 'saved']
 ]);

@@ -164,10 +164,15 @@ class PlatformAndReleaseDateFilterProvider implements IExperimentationFilterProv
 
 	private _initReleaseDate(): string | undefined {
 		try {
-			const product = require(path.join(vscode.env.appRoot, 'product.json'));
+			const productPath = path.join(vscode.env.appRoot, 'product.json');
+			const fs = require('fs');
+			if (!fs.existsSync(productPath)) {
+				return undefined;
+			}
+			const product = require(productPath);
 			return this._formatReleaseDate(product.date ?? '');
 		} catch (error) {
-			this._logService.warn(`[PlatformAndReleaseDateFilterProvider]::_initReleaseDate Failed to read product.json for release date: ${error}`);
+			this._logService.debug(`[PlatformAndReleaseDateFilterProvider]::_initReleaseDate Could not read product.json: ${error}`);
 			return undefined;
 		}
 	}
@@ -209,8 +214,8 @@ export class MicrosoftExperimentationService extends BaseExperimentationService 
 		@ILogService logService: ILogService
 	) {
 
-		const id = context.extension.id;
-		const version = context.extension.packageJSON['version'];
+		const id = (context as any).extension?.id ?? 'GitHub.copilot-chat';
+		const version = (context as any).extension?.packageJSON?.['version'] ?? '0.44.0';
 		const targetPopulation = getTargetPopulation(envService.isPreRelease());
 		let self: MicrosoftExperimentationService | undefined = undefined;
 		const delegateFn = (globalState: vscode.Memento, userInfoStore: UserInfoStore) => {

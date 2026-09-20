@@ -445,11 +445,20 @@ export class CopilotCLISDK implements ICopilotCLISDK {
 		if (await checkFileExists(successfulPlaceholder)) {
 			return;
 		}
-		await Promise.all([
-			ensureNodePtyShim(this.extensionContext.extensionPath, this.envService.appRoot, this.logService),
-			ensureRipgrepShim(this.extensionContext.extensionPath, this.envService.appRoot, this.logService)
-		]);
-		await fs.writeFile(successfulPlaceholder, 'Shims created successfully');
+		try {
+			await Promise.all([
+				ensureNodePtyShim(this.extensionContext.extensionPath, this.envService.appRoot, this.logService),
+				ensureRipgrepShim(this.extensionContext.extensionPath, this.envService.appRoot, this.logService)
+			]);
+		} catch (e) {
+			this.logService.warn(`[CopilotCLISession] Prebuild shims skipped: ${e}`);
+		}
+		try {
+			await fs.mkdir(path.dirname(successfulPlaceholder), { recursive: true });
+			await fs.writeFile(successfulPlaceholder, 'Shims created successfully');
+		} catch {
+			// Ignore placeholder write errors in custom/sandbox extension paths
+		}
 	}
 
 	public async getAuthInfo(): Promise<NonNullable<SessionOptions['authInfo']>> {

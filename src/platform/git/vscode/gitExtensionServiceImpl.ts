@@ -32,7 +32,7 @@ export class GitExtensionServiceImpl implements IGitExtensionService {
 
 	get extensionAvailable(): boolean {
 		if (this._extensionEnablement === undefined) {
-			return !!vscode.extensions.getExtension<GitExtension>('vscode.git');
+			return !!vscode.extensions?.getExtension<GitExtension>('vscode.git');
 		} else {
 			return this._extensionEnablement;
 		}
@@ -40,7 +40,7 @@ export class GitExtensionServiceImpl implements IGitExtensionService {
 
 	private _initializeExtensionApi(): vscode.Disposable[] {
 		const disposables: vscode.Disposable[] = [];
-		let gitExtension = vscode.extensions.getExtension<GitExtension>('vscode.git');
+		let gitExtension = vscode.extensions?.getExtension<GitExtension>('vscode.git');
 
 		const initialize = async () => {
 			let extension: GitExtension;

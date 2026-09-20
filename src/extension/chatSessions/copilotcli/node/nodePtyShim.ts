@@ -50,6 +50,12 @@ export async function copyNodePtyFiles(extensionPath: string, sourceNodePtyPath:
 	logService.info(`Creating node-pty shim: source=${sourceNodePtyPath}, dest=${nodePtyDir}`);
 
 	try {
+		try {
+			await fs.access(sourceNodePtyPath);
+		} catch {
+			logService.warn(`node-pty source not found at ${sourceNodePtyPath}, skipping host shim.`);
+			return;
+		}
 		await fs.mkdir(nodePtyDir, { recursive: true });
 		const entries = await fs.readdir(sourceNodePtyPath);
 		const uniqueEntries = [...new Set(entries)];
@@ -57,8 +63,7 @@ export async function copyNodePtyFiles(extensionPath: string, sourceNodePtyPath:
 
 		await copyNodePtyWithRetries(sourceNodePtyPath, nodePtyDir, uniqueEntries, logService);
 	} catch (error) {
-		logService.error(`Failed to create node-pty shim (source dir: ${sourceNodePtyPath}, extension dir: ${nodePtyDir})`, error);
-		throw error;
+		logService.warn(`Failed to create node-pty shim (source dir: ${sourceNodePtyPath}, extension dir: ${nodePtyDir})`, error);
 	}
 }
 

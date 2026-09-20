@@ -111,33 +111,41 @@ function appendLimitedWindow<T>(target: T[], data: T) {
 }
 
 export function installTerminalBufferListeners(): Disposable[] {
-	return [
-		window.onDidChangeTerminalState(t => {
+	const disposables: Disposable[] = [];
+	if (typeof window.onDidChangeTerminalState === 'function') {
+		disposables.push(window.onDidChangeTerminalState(t => {
 			if (window.activeTerminal && t.processId === window.activeTerminal.processId) {
 				const newShellType = t.state.shell;
 				if (newShellType && newShellType !== lastDetectedShellType) {
 					lastDetectedShellType = newShellType;
 				}
 			}
-		}),
-		window.onDidWriteTerminalData(e => {
+		}));
+	}
+	if (typeof window.onDidWriteTerminalData === 'function') {
+		disposables.push(window.onDidWriteTerminalData(e => {
 			let dataBuffer = terminalBuffers.get(e.terminal);
 			if (!dataBuffer) {
 				dataBuffer = [];
 				terminalBuffers.set(e.terminal, dataBuffer);
 			}
 			appendLimitedWindow(dataBuffer, removeAnsiEscapeCodes(e.data));
-		}),
-		window.onDidExecuteTerminalCommand(e => {
+		}));
+	}
+	if (typeof window.onDidExecuteTerminalCommand === 'function') {
+		disposables.push(window.onDidExecuteTerminalCommand(e => {
 			let commands = terminalCommands.get(e.terminal);
 			if (!commands) {
 				commands = [];
 				terminalCommands.set(e.terminal, commands);
 			}
 			appendLimitedWindow(commands, e);
-		}),
-		window.onDidCloseTerminal(e => {
+		}));
+	}
+	if (typeof window.onDidCloseTerminal === 'function') {
+		disposables.push(window.onDidCloseTerminal(e => {
 			terminalBuffers.delete(e);
-		})
-	];
+		}));
+	}
+	return disposables;
 }

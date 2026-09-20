@@ -59,6 +59,9 @@ function removeAnsiEscapeCodes(str: string): string {
 }
 
 export function installDebugOutputListeners(): Disposable[] {
+	if (typeof debug?.registerDebugAdapterTrackerFactory !== 'function') {
+		return [];
+	}
 	const debugAdapter = debug.registerDebugAdapterTrackerFactory('*', new DebugSessionLoggingFactory());
 	return [debugAdapter];
 }

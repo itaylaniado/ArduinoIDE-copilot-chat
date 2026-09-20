@@ -6,6 +6,10 @@
 import * as os from 'os';
 import * as path from 'path';
 import { ExtensionContext, ExtensionMode, env, workspace } from 'vscode';
+import { IArduinoCliService, ArduinoCliService } from '../../arduino/services/arduinoCliService';
+import { IBoardContextService, BoardContextService } from '../../arduino/services/boardContextService';
+import { ISketchService, SketchService } from '../../arduino/services/sketchService';
+import { ISerialTelemetryService, SerialTelemetryService } from '../../arduino/services/serialTelemetryService';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
 import { ICopilotTokenManager } from '../../../platform/authentication/common/copilotTokenManager';
 import { StaticGitHubAuthenticationService } from '../../../platform/authentication/common/staticGitHubAuthenticationService';
@@ -178,9 +182,10 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(IImageService, new SyncDescriptor(VSCodeImageServiceImpl));
 
 	builder.define(ITelemetryUserConfig, new SyncDescriptor(TelemetryUserConfigImpl, [undefined, undefined]));
-	const internalAIKey = extensionContext.extension.packageJSON.internalAIKey ?? '';
-	const internalLargeEventAIKey = extensionContext.extension.packageJSON.internalLargeStorageAriaKey ?? '';
-	const ariaKey = extensionContext.extension.packageJSON.ariaKey ?? '';
+	const pkgJSON = (extensionContext as any).extension?.packageJSON ?? {};
+	const internalAIKey = pkgJSON.internalAIKey ?? '';
+	const internalLargeEventAIKey = pkgJSON.internalLargeStorageAriaKey ?? '';
+	const ariaKey = pkgJSON.ariaKey ?? '';
 	if (isTestMode || isScenarioAutomation) {
 		setupTelemetry(builder, extensionContext, internalAIKey, internalLargeEventAIKey, ariaKey);
 		// If we're in testing mode, then most code will be called from an actual test,
@@ -259,6 +264,10 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(IProxyModelsService, new SyncDescriptor(ProxyModelsService));
 	builder.define(IPowerService, new SyncDescriptor(PowerService));
 	builder.define(IInlineEditsModelService, new SyncDescriptor(InlineEditsModelService));
+	builder.define(IArduinoCliService, new SyncDescriptor(ArduinoCliService));
+	builder.define(IBoardContextService, new SyncDescriptor(BoardContextService));
+	builder.define(ISketchService, new SyncDescriptor(SketchService));
+	builder.define(ISerialTelemetryService, new SyncDescriptor(SerialTelemetryService));
 	builder.define(IUndesiredModelsManager, new SyncDescriptor(UndesiredModels.Manager));
 	builder.define(ICopilotInlineCompletionItemProviderService, new SyncDescriptor(CopilotInlineCompletionItemProviderService));
 	builder.define(ISimilarFilesContextService, new SyncDescriptor(SimilarFilesContextService));
@@ -282,7 +291,7 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 		settingCaptureContent: otelSettings.get<boolean>('captureContent'),
 		settingOutfile: otelSettings.get<string>('outfile') || undefined,
 		settingDbSpanExporter: otelSettings.get<boolean>('dbSpanExporter.enabled'),
-		extensionVersion: extensionContext.extension.packageJSON.version ?? '0.0.0',
+		extensionVersion: (extensionContext as any).extension?.packageJSON?.version ?? '0.0.0',
 		sessionId: env.sessionId,
 	});
 	if (otelConfig.enabled) {
@@ -314,7 +323,7 @@ function setupTelemetry(builder: IInstantiationServiceBuilder, extensionContext:
 
 	if (ExtensionMode.Production === extensionContext.extensionMode && !isScenarioAutomation) {
 		builder.define(ITelemetryService, new SyncDescriptor(TelemetryService, [
-			extensionContext.extension.packageJSON.name,
+			(extensionContext as any).extension?.packageJSON?.name ?? 'copilot-chat',
 			internalAIKey,
 			internalLargeEventAIKey,
 			externalAIKey,

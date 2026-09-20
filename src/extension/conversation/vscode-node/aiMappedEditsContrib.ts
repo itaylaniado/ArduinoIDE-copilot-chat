@@ -22,6 +22,8 @@ export class AiMappedEditsContrib extends Disposable implements IExtensionContri
 	) {
 		super();
 
-		this._register(vscode.chat.registerMappedEditsProvider2(instantiationService.createInstance(AIMappedEditsProvider2)));
+		if (typeof (vscode.chat as any)?.registerMappedEditsProvider2 === 'function') {
+			this._register((vscode.chat as any).registerMappedEditsProvider2(instantiationService.createInstance(AIMappedEditsProvider2)));
+		}
 	}
 }

@@ -11,6 +11,6 @@ export class ChatSessionService implements IChatSessionService {
 	declare _serviceBrand: undefined;
 
 	get onDidDisposeChatSession(): Event<string> {
-		return vscode.chat.onDidDisposeChatSession as Event<string>;
+		return (vscode.chat?.onDidDisposeChatSession ?? Event.None) as Event<string>;
 	}
 }

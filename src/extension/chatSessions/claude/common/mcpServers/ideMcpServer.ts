@@ -10,11 +10,11 @@ import { URI } from '../../../../../util/vs/base/common/uri';
 import { DiagnosticSeverity } from '../../../../../vscodeTypes';
 import { IClaudeMcpServerContributor, registerClaudeMcpServerContributor } from '../claudeMcpServerRegistry';
 
-const severityToString: Record<DiagnosticSeverity, string> = {
-	[DiagnosticSeverity.Error]: 'error',
-	[DiagnosticSeverity.Warning]: 'warning',
-	[DiagnosticSeverity.Information]: 'information',
-	[DiagnosticSeverity.Hint]: 'hint',
+const severityToString: Record<number, string> = {
+	[(DiagnosticSeverity?.Error ?? 0)]: 'error',
+	[(DiagnosticSeverity?.Warning ?? 1)]: 'warning',
+	[(DiagnosticSeverity?.Information ?? 2)]: 'information',
+	[(DiagnosticSeverity?.Hint ?? 3)]: 'hint',
 };
 
 export interface DiagnosticEntry {

@@ -97,6 +97,9 @@ export class ConversationFeature implements IExtensionContribution {
 		} else {
 			markChatExtGlobal(ChatExtGlobalPerfMark.WillWaitForCopilotToken);
 			this.logService.info(`ConversationFeature: Waiting for copilot token to activate conversation feature`);
+			setTimeout(() => {
+				activationBlockerDeferred.complete();
+			}, 3000);
 		}
 
 		this._disposables.add(authenticationService.onDidAuthenticationChange(async () => {
@@ -176,7 +179,10 @@ export class ConversationFeature implements IExtensionContribution {
 				return;
 			}
 
-			return vscode.workspace.registerAITextSearchProvider('file', this.instantiationService.createInstance(SemanticSearchTextSearchProvider));
+			if (typeof (vscode.workspace as any).registerAITextSearchProvider === 'function') {
+				return (vscode.workspace as any).registerAITextSearchProvider('file', this.instantiationService.createInstance(SemanticSearchTextSearchProvider));
+			}
+			return undefined;
 		}
 	}
 
@@ -186,7 +192,10 @@ export class ConversationFeature implements IExtensionContribution {
 		}
 
 		this._settingsSearchProviderRegistered = true;
-		return vscode.ai.registerSettingsSearchProvider(this.settingsEditorSearchService);
+		if (typeof (vscode as any).ai?.registerSettingsSearchProvider === 'function') {
+			return (vscode as any).ai.registerSettingsSearchProvider(this.settingsEditorSearchService);
+		}
+		return undefined;
 	}
 
 	private registerProviders(): IDisposable {
@@ -213,7 +222,7 @@ export class ConversationFeature implements IExtensionContribution {
 	}
 
 	private registerParticipantDetectionProvider() {
-		if ('registerChatParticipantDetectionProvider' in vscode.chat) {
+		if (vscode.chat && 'registerChatParticipantDetectionProvider' in vscode.chat) {
 			const provider = this.instantiationService.createInstance(IntentDetector);
 			return vscode.chat.registerChatParticipantDetectionProvider(provider);
 		}
@@ -327,6 +336,9 @@ export class ConversationFeature implements IExtensionContribution {
 
 	private registerRelatedInformationProviders(): IDisposable {
 		const disposables = new DisposableStore();
+		if (!vscode.ai?.registerRelatedInformationProvider || !vscode.RelatedInformationType) {
+			return disposables;
+		}
 		[
 			vscode.ai.registerRelatedInformationProvider(
 				vscode.RelatedInformationType.CommandInformation,

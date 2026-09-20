@@ -10,7 +10,7 @@ import { copyFile, mkdir, readdir, rename } from 'fs/promises';
 import { glob } from 'glob';
 import * as path from 'path';
 
-const REPO_ROOT = import.meta.dirname;
+const REPO_ROOT = typeof __dirname !== 'undefined' ? __dirname : (import.meta.dirname || process.cwd());
 const isWatch = process.argv.includes('--watch');
 const isDev = process.argv.includes('--dev');
 const isPreRelease = process.argv.includes('--prerelease');
@@ -178,6 +178,17 @@ const shimVsCodeTypesPlugin: esbuild.Plugin = {
 	}
 };
 
+const shimSqlitePlugin: esbuild.Plugin = {
+	name: 'shimSqlitePlugin',
+	setup(build) {
+		build.onResolve({ filter: /^node:sqlite$/ }, () => {
+			return {
+				path: path.resolve(REPO_ROOT, 'src/util/common/shims/nodeSqliteShim.ts')
+			};
+		});
+	}
+};
+
 const nodeExtHostBuildOptions = {
 	...baseNodeBuildOptions,
 	entryPoints: [
@@ -192,11 +203,474 @@ const nodeExtHostBuildOptions = {
 		{ in: './src/sanity-test-extension.ts', out: 'sanity-test-extension' },
 	],
 	loader: { '.ps1': 'text' },
-	plugins: [testBundlePlugin, sanityTestBundlePlugin, importMetaPlugin],
+	plugins: [testBundlePlugin, sanityTestBundlePlugin, importMetaPlugin, shimSqlitePlugin],
 	external: [
 		...baseNodeBuildOptions.external,
 		'vscode'
-	]
+	],
+	banner: {
+		js: `
+// Polyfill VS Code proposed APIs and enums for Arduino IDE / Theia compatibility
+(function() {
+	try {
+		const _vsc = require('vscode');
+		if (_vsc) {
+			if (!_vsc.ChatEditingSessionActionOutcome) {
+				_vsc.ChatEditingSessionActionOutcome = { Accepted: 1, Rejected: 2, Saved: 3 };
+			}
+			if (!_vsc.ChatResultFeedbackKind) {
+				_vsc.ChatResultFeedbackKind = { Unhelpful: 0, Helpful: 1 };
+			}
+			if (!_vsc.InlineCompletionEndOfLifeReasonKind) {
+				_vsc.InlineCompletionEndOfLifeReasonKind = { Accepted: 0, Rejected: 1, Ignored: 2 };
+			}
+			if (!_vsc.RelatedInformationType) {
+				_vsc.RelatedInformationType = { CommandInformation: 1, SettingInformation: 2 };
+			}
+			if (!_vsc.ChatLocation) {
+				_vsc.ChatLocation = { Panel: 1, Terminal: 2, Editor: 3, Notebook: 4 };
+			}
+			if (!_vsc.ChatSessionStatus) {
+				_vsc.ChatSessionStatus = { InProgress: 1, Completed: 2, Failed: 3 };
+			}
+			if (!_vsc.ChatVariableLevel) {
+				_vsc.ChatVariableLevel = { Short: 1, Medium: 2, Full: 3 };
+			}
+			if (!_vsc.ChatDebugLogLevel) {
+				_vsc.ChatDebugLogLevel = { Trace: 1, Debug: 2, Info: 3, Warning: 4, Error: 5 };
+			}
+			if (!_vsc.ChatDebugToolCallResult) {
+				_vsc.ChatDebugToolCallResult = { Success: 1, Error: 2 };
+			}
+			if (!_vsc.ChatDebugSubagentStatus) {
+				_vsc.ChatDebugSubagentStatus = { Running: 1, Completed: 2, Failed: 3 };
+			}
+			if (!_vsc.ChatDebugHookResult) {
+				_vsc.ChatDebugHookResult = { Success: 1, Error: 2, NonBlockingError: 3 };
+			}
+			if (!_vsc.ChatSessionCustomizationType) {
+				_vsc.ChatSessionCustomizationType = { Agent: 1, Skill: 2, Instructions: 3, Hook: 4, Plugins: 5 };
+			}
+			if (!_vsc.InlineCompletionDisplayLocationKind) {
+				_vsc.InlineCompletionDisplayLocationKind = { Code: 1, Label: 2 };
+			}
+			if (!_vsc.InlineCompletionsDisposeReasonKind) {
+				_vsc.InlineCompletionsDisposeReasonKind = { NotTaken: 0, LostRace: 1, TokenCancellation: 2 };
+			}
+			if (!_vsc.LanguageModelChatMessageRole) {
+				_vsc.LanguageModelChatMessageRole = { User: 1, Assistant: 2, System: 3 };
+			}
+			if (!_vsc.LanguageModelChatToolMode) {
+				_vsc.LanguageModelChatToolMode = { Auto: 1, Required: 2 };
+			}
+			if (!_vsc.SettingsSearchResultKind) {
+				_vsc.SettingsSearchResultKind = { EXACT_MATCH: 1, SYNONYM: 2, EMBEDDED: 3, LLM_RANKED: 4 };
+			}
+			if (!_vsc.ThemeIcon) {
+				const _ThemeIcon = class {
+					constructor(id, color) {
+						this.id = id;
+						this.color = color;
+					}
+				};
+				_ThemeIcon.File = new _ThemeIcon('file');
+				_ThemeIcon.Folder = new _ThemeIcon('folder');
+				_vsc.ThemeIcon = _ThemeIcon;
+			}
+			if (!_vsc.ThemeColor) {
+				_vsc.ThemeColor = class {
+					constructor(id) {
+						this.id = id;
+					}
+				};
+			}
+			function _patchProperty(parent, prop, stubs) {
+				if (!parent) return;
+				const current = parent[prop];
+				if (!current) {
+					const target = Object.assign({}, stubs);
+					try {
+						parent[prop] = target;
+					} catch {
+						Object.defineProperty(parent, prop, {
+							value: target,
+							writable: true,
+							configurable: true,
+							enumerable: true
+						});
+					}
+					return;
+				}
+
+				const overrides = Object.assign({}, stubs);
+
+				const proxy = new Proxy({}, {
+					get(_target, p, receiver) {
+						if (typeof p === 'string' && p in overrides) {
+							return overrides[p];
+						}
+						const val = Reflect.get(current, p);
+						return typeof val === 'function' ? val.bind(current) : val;
+					},
+					set(_target, p, value) {
+						if (typeof p === 'string') {
+							overrides[p] = value;
+						}
+						return true;
+					},
+					has(_target, p) {
+						return (typeof p === 'string' && p in overrides) || p in current;
+					}
+				});
+
+				try {
+					parent[prop] = proxy;
+				} catch {
+					Object.defineProperty(parent, prop, {
+						value: proxy,
+						writable: true,
+						configurable: true,
+						enumerable: true
+					});
+				}
+			}
+
+			_patchProperty(_vsc, 'chat', {
+				createChatParticipant: () => ({
+					onDidReceiveFeedback: () => ({ dispose: () => {} }),
+					onDidPerformAction: () => ({ dispose: () => {} }),
+					dispose: () => {},
+					iconPath: undefined,
+					supportIssueReporting: false
+				}),
+				registerChatSessionItemProvider: () => ({ dispose: () => {} }),
+				registerChatSessionContentProvider: () => ({ dispose: () => {} }),
+				registerChatSessionCustomizationProvider: () => ({ dispose: () => {} }),
+				registerChatParticipantDetectionProvider: () => ({ dispose: () => {} }),
+				registerCustomAgentProvider: () => ({ dispose: () => {} }),
+				registerInstructionsProvider: () => ({ dispose: () => {} }),
+				registerMappedEditsProvider2: () => ({ dispose: () => {} }),
+				registerChatDebugLogProvider: () => ({ dispose: () => {} }),
+				createChatSessionItemController: () => ({ dispose: () => {} }),
+				onDidChangeCustomAgents: () => ({ dispose: () => {} }),
+				onDidChangeInstructions: () => ({ dispose: () => {} }),
+				onDidChangeSkills: () => ({ dispose: () => {} }),
+				onDidChangeHooks: () => ({ dispose: () => {} }),
+				onDidChangePlugins: () => ({ dispose: () => {} }),
+				customAgents: [],
+				instructions: [],
+				skills: [],
+				hooks: [],
+				plugins: []
+			});
+
+			if (!_vsc.ai) {
+				_vsc.ai = {
+					registerRelatedInformationProvider: () => ({ dispose: () => {} }),
+					registerSettingsSearchProvider: () => ({ dispose: () => {} })
+				};
+			}
+
+			const _lmStubs = {
+				selectChatModels: async () => [],
+				registerLanguageModelChatProvider: () => ({ dispose: () => {} }),
+				registerTool: () => ({ dispose: () => {} }),
+				invokeTool: async () => ({ content: [] }),
+				tools: [],
+				onDidChangeTools: () => ({ dispose: () => {} }),
+				mcpServerDefinitions: [],
+				onDidChangeMcpServerDefinitions: () => ({ dispose: () => {} }),
+				startMcpGateway: async () => undefined
+			};
+			const _lmProxy = new Proxy(_lmStubs, {
+				get(target, p) {
+					if (typeof p === 'string') {
+						if (p in target) {
+							return target[p];
+						}
+						if (p.startsWith('register') || p.startsWith('onDidChange')) {
+							return () => ({ dispose: () => {} });
+						}
+					}
+					return target[p];
+				}
+			});
+
+			_patchProperty(_vsc, 'lm', _lmProxy);
+
+			const _powerStubs = {
+				onDidSuspend: () => ({ dispose: () => {} }),
+				onDidResume: () => ({ dispose: () => {} }),
+				onDidChangeOnBatteryPower: () => ({ dispose: () => {} }),
+				onDidChangeThermalState: () => ({ dispose: () => {} }),
+				onDidChangeSpeedLimit: () => ({ dispose: () => {} }),
+				onWillShutdown: () => ({ dispose: () => {} }),
+				onDidLockScreen: () => ({ dispose: () => {} }),
+				onDidUnlockScreen: () => ({ dispose: () => {} }),
+				isOnBatteryPower: async () => false,
+				getCurrentThermalState: async () => 'nominal',
+				getSystemIdleTime: async () => 0,
+				startPowerSaveBlocker: async () => ({ id: 1, dispose: () => {} })
+			};
+			const _powerProxy = new Proxy(_powerStubs, {
+				get(target, p) {
+					if (typeof p === 'string') {
+						if (p in target) {
+							return target[p];
+						}
+						if (p.startsWith('onDid') || p.startsWith('onWill')) {
+							return () => ({ dispose: () => {} });
+						}
+					}
+					return target[p];
+				}
+			});
+
+			_patchProperty(_vsc, 'env', {
+				createTelemetryLogger: (sender, options) => ({
+					onDidChangeEnableStates: () => ({ dispose: () => {} }),
+					isUsageEnabled: true,
+					isErrorsEnabled: true,
+					logUsage: (eventName, data) => {
+						try { sender?.sendEventData?.(eventName, data); } catch {}
+					},
+					logError: (errorOrEventName, data) => {
+						try {
+							if (typeof errorOrEventName === 'string') {
+								sender?.sendEventData?.(errorOrEventName, data);
+							} else {
+								sender?.sendErrorData?.(errorOrEventName, data);
+							}
+						} catch {}
+					},
+					dispose: () => {}
+				}),
+				getDataChannel: (channelName) => ({
+					channelName,
+					onDidReceiveData: () => ({ dispose: () => {} }),
+					postMessage: () => {},
+					dispose: () => {}
+				}),
+				power: _powerProxy
+			});
+
+			if (!_vsc.l10n) {
+				_vsc.l10n = {
+					t: (msg, ...args) => {
+						if (typeof msg === 'string') {
+							let str = msg;
+							for (let i = 0; i < args.length; i++) {
+								str = str.replace('{' + i + '}', String(args[i]));
+							}
+							return str;
+						}
+						return (msg && msg.message) || String(msg || '');
+					}
+				};
+			}
+
+			_patchProperty(_vsc, 'authentication', {
+				getSession: async () => undefined,
+				registerAuthenticationProvider: () => ({ dispose: () => {} }),
+				onDidChangeSessions: () => ({ dispose: () => {} })
+			});
+
+			_patchProperty(_vsc, 'debug', {
+				registerDebugAdapterTrackerFactory: () => ({ dispose: () => {} }),
+				onDidStartDebugSession: () => ({ dispose: () => {} }),
+				onDidTerminateDebugSession: () => ({ dispose: () => {} }),
+				activeDebugSession: undefined
+			});
+
+			_patchProperty(_vsc, 'window', {
+				onDidExecuteTerminalCommand: () => ({ dispose: () => {} }),
+				onDidChangeTerminalState: () => ({ dispose: () => {} }),
+				onDidWriteTerminalData: () => ({ dispose: () => {} }),
+				onDidCloseTerminal: () => ({ dispose: () => {} }),
+				createChatStatusItem: (id) => ({
+					id,
+					title: '',
+					description: '',
+					detail: undefined,
+					show: () => {},
+					hide: () => {},
+					dispose: () => {}
+				}),
+				tabGroups: {
+					all: [],
+					activeTabGroup: undefined,
+					onDidChangeTabGroups: () => ({ dispose: () => {} }),
+					onDidChangeTabs: () => ({ dispose: () => {} }),
+					close: async () => true
+				}
+			});
+
+			_patchProperty(_vsc, 'workspace', {
+				isTrusted: true,
+				requestWorkspaceTrust: async () => true,
+				onDidGrantWorkspaceTrust: () => ({ dispose: () => {} }),
+				isAgentSessionsWorkspace: false,
+				registerAITextSearchProvider: () => ({ dispose: () => {} })
+			});
+
+			_patchProperty(_vsc, 'extensions', {
+				getExtension: () => undefined,
+				all: [],
+				onDidChange: () => ({ dispose: () => {} })
+			});
+			if (!_vsc.ExtensionMode) {
+				_vsc.ExtensionMode = { Production: 1, Development: 2, Test: 3 };
+			}
+			if (!_vsc.ExtensionKind) {
+				_vsc.ExtensionKind = { UI: 1, Workspace: 2 };
+			}
+			if (!_vsc.DiagnosticSeverity) {
+				_vsc.DiagnosticSeverity = { Error: 0, Warning: 1, Information: 2, Hint: 3 };
+			}
+			if (!_vsc.EndOfLine) {
+				_vsc.EndOfLine = { LF: 1, CRLF: 2 };
+			}
+			if (!_vsc.FileType) {
+				_vsc.FileType = { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 };
+			}
+			if (!_vsc.NotebookCellKind) {
+				_vsc.NotebookCellKind = { Markup: 1, Code: 2 };
+			}
+			if (!_vsc.TextEditorSelectionChangeKind) {
+				_vsc.TextEditorSelectionChangeKind = { Keyboard: 1, Mouse: 2, Command: 3 };
+			}
+			if (!_vsc.TextDocumentChangeReason) {
+				_vsc.TextDocumentChangeReason = { Undo: 1, Redo: 2 };
+			}
+			if (!_vsc.SymbolKind) {
+				_vsc.SymbolKind = { File: 0, Module: 1, Namespace: 2, Package: 3, Class: 4, Method: 5, Property: 6, Field: 7, Constructor: 8, Enum: 9, Interface: 10, Function: 11, Variable: 12, Constant: 13, String: 14, Number: 15, Boolean: 16, Array: 17, Object: 18, Key: 19, Null: 20, EnumMember: 21, Struct: 22, Event: 23, Operator: 24, TypeParameter: 25 };
+			}
+			if (!_vsc.CodeAction) {
+				_vsc.CodeAction = class {
+					constructor(title, kind) {
+						this.title = title;
+						this.kind = kind;
+					}
+				};
+			}
+			if (!_vsc.CodeActionKind || typeof _vsc.CodeActionKind.QuickFix?.append !== 'function') {
+				class CodeActionKindImpl {
+					constructor(value) {
+						this.value = value;
+					}
+					append(parts) {
+						return new CodeActionKindImpl(this.value ? (this.value + '.' + parts) : parts);
+					}
+					contains(other) {
+						return other && (this.value === other.value || (other.value && other.value.startsWith(this.value + '.')));
+					}
+					intersects(other) {
+						return this.contains(other) || (other && typeof other.contains === 'function' && other.contains(this));
+					}
+				}
+				CodeActionKindImpl.Empty = new CodeActionKindImpl('');
+				CodeActionKindImpl.QuickFix = new CodeActionKindImpl('quickfix');
+				CodeActionKindImpl.Refactor = new CodeActionKindImpl('refactor');
+				CodeActionKindImpl.RefactorExtract = new CodeActionKindImpl('refactor.extract');
+				CodeActionKindImpl.RefactorInline = new CodeActionKindImpl('refactor.inline');
+				CodeActionKindImpl.RefactorRewrite = new CodeActionKindImpl('refactor.rewrite');
+				CodeActionKindImpl.Source = new CodeActionKindImpl('source');
+				CodeActionKindImpl.SourceOrganizeImports = new CodeActionKindImpl('source.organizeImports');
+				CodeActionKindImpl.SourceFixAll = new CodeActionKindImpl('source.fixAll');
+				_vsc.CodeActionKind = CodeActionKindImpl;
+			}
+			if (!_vsc.TreeItem) {
+				_vsc.TreeItem = class {
+					constructor(label, collapsibleState) {
+						this.label = label;
+						this.collapsibleState = collapsibleState;
+					}
+				};
+			}
+			if (!_vsc.TreeItemCollapsibleState) {
+				_vsc.TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 };
+			}
+			if (!_vsc.InlineCompletionList) {
+				_vsc.InlineCompletionList = class {
+					constructor(items) {
+						this.items = items || [];
+					}
+				};
+			}
+			if (!_vsc.InlineCompletionItem) {
+				_vsc.InlineCompletionItem = class {
+					constructor(insertText, range, command) {
+						this.insertText = insertText;
+						this.range = range;
+						this.command = command;
+					}
+				};
+			}
+			if (!_vsc.InlineCompletionTriggerKind) {
+				_vsc.InlineCompletionTriggerKind = { Invoke: 0, Automatic: 1 };
+			}
+			if (!_vsc.ConfigurationTarget) {
+				_vsc.ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 };
+			}
+			if (!_vsc.ColorThemeKind) {
+				_vsc.ColorThemeKind = { Light: 1, Dark: 2, HighContrast: 3, HighContrastLight: 4 };
+			}
+			if (!_vsc.ProgressLocation) {
+				_vsc.ProgressLocation = { SourceControl: 1, Window: 10, Notification: 15 };
+			}
+			if (!_vsc.QuickPickItemKind) {
+				_vsc.QuickPickItemKind = { Separator: -1, Default: 0 };
+			}
+			if (!_vsc.StatusBarAlignment) {
+				_vsc.StatusBarAlignment = { Left: 1, Right: 2 };
+			}
+			if (!_vsc.LogLevel) {
+				_vsc.LogLevel = { Off: 0, Trace: 1, Debug: 2, Info: 3, Warning: 4, Error: 5 };
+			}
+			if (!_vsc.CommentMode) {
+				_vsc.CommentMode = { Editing: 0, Preview: 1 };
+			}
+			if (!_vsc.CommentThreadCollapsibleState) {
+				_vsc.CommentThreadCollapsibleState = { Collapsed: 0, Expanded: 1 };
+			}
+			if (!_vsc.TextEditorRevealType) {
+				_vsc.TextEditorRevealType = { Default: 0, InCenter: 1, InCenterIfOutsideViewport: 2, AtTop: 3 };
+			}
+			if (!_vsc.TextEditorCursorStyle) {
+				_vsc.TextEditorCursorStyle = { Line: 1, Block: 2, Underline: 3, LineThin: 4, BlockOutline: 5, UnderlineThin: 6 };
+			}
+			if (!_vsc.TextEditorLineNumbersStyle) {
+				_vsc.TextEditorLineNumbersStyle = { Off: 0, On: 1, Relative: 2 };
+			}
+			if (!_vsc.LanguageModelChatMessage) {
+				_vsc.LanguageModelChatMessage = {
+					User: (content, name) => ({ role: 1, content, name }),
+					Assistant: (content, name) => ({ role: 2, content, name }),
+					System: (content) => ({ role: 3, content })
+				};
+			}
+			if (!_vsc.LanguageModelError) {
+				_vsc.LanguageModelError = {
+					Blocked: (msg) => new Error(msg),
+					NotFound: (msg) => new Error(msg)
+				};
+			}
+			if (!_vsc.LanguageModelTextPart) {
+				_vsc.LanguageModelTextPart = class { constructor(value) { this.value = value; } };
+			}
+			if (!_vsc.LanguageModelToolCallPart) {
+				_vsc.LanguageModelToolCallPart = class { constructor(callId, name, input) { this.callId = callId; this.name = name; this.input = input; } };
+			}
+			if (!_vsc.LanguageModelToolResultPart) {
+				_vsc.LanguageModelToolResultPart = class { constructor(callId, content) { this.callId = callId; this.content = content; } };
+			}
+		}
+	} catch (e) {
+		// Ignore if require('vscode') fails
+	}
+})();
+`
+	}
 } satisfies esbuild.BuildOptions;
 
 const webExtHostBuildOptions = {
@@ -258,8 +732,8 @@ const nodeSimulationWorkbenchUIBuildOptions = {
 
 async function typeScriptServerPluginPackageJsonInstall(): Promise<void> {
 	await mkdir('./node_modules/@vscode/copilot-typescript-server-plugin', { recursive: true });
-	const source = path.join(import.meta.dirname, './src/extension/typescriptContext/serverPlugin/package.json');
-	const destination = path.join(import.meta.dirname, './node_modules/@vscode/copilot-typescript-server-plugin/package.json');
+	const source = path.join(REPO_ROOT, './src/extension/typescriptContext/serverPlugin/package.json');
+	const destination = path.join(REPO_ROOT, './node_modules/@vscode/copilot-typescript-server-plugin/package.json');
 	try {
 		await copyFile(source, destination);
 	} catch (error) {
@@ -323,11 +797,22 @@ async function moveSourceMapsToSeparateDir(): Promise<void> {
 	}
 }
 
+async function generateWebviewAssets(): Promise<void> {
+	const webviewDir = path.join(REPO_ROOT, 'src', 'extension', 'arduino', 'webview');
+	const css = fs.readFileSync(path.join(webviewDir, 'main.css'), 'utf8');
+	const js = fs.readFileSync(path.join(webviewDir, 'main.js'), 'utf8');
+	const code = '/* Auto-generated by build */\n' +
+		'export const DEFAULT_MAIN_CSS = ' + JSON.stringify(css) + ';\n' +
+		'export const DEFAULT_MAIN_JS = ' + JSON.stringify(js) + ';\n';
+	fs.writeFileSync(path.join(webviewDir, 'webviewAssets.ts'), code, 'utf8');
+}
+
 async function main() {
 	if (!isDev) {
 		applyPackageJsonPatch(isPreRelease);
 	}
 
+	await generateWebviewAssets();
 	await typeScriptServerPluginPackageJsonInstall();
 
 	if (isWatch) {
@@ -409,13 +894,18 @@ async function main() {
 			esbuild.build(webviewBuildOptions),
 		]);
 
+		// Copy webview assets into dist/ so they can be inlined at runtime
+		const webviewSrcDir = path.join(REPO_ROOT, 'src', 'extension', 'arduino', 'webview');
+		await copyFile(path.join(webviewSrcDir, 'main.css'), path.join(REPO_ROOT, 'dist', 'main.css'));
+		await copyFile(path.join(webviewSrcDir, 'main.js'), path.join(REPO_ROOT, 'dist', 'main.js'));
+
 		// Move source maps to separate directory so they're not packaged with the extension
 		await moveSourceMapsToSeparateDir();
 	}
 }
 
 function applyPackageJsonPatch(isPreRelease: boolean) {
-	const packagejsonPath = path.join(import.meta.dirname, './package.json');
+	const packagejsonPath = path.join(REPO_ROOT, './package.json');
 	const json = JSON.parse(fs.readFileSync(packagejsonPath).toString());
 
 	const newProps: any = {

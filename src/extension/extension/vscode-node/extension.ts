@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import '../../../util/common/shims/theiaVsCodeShim';
 import { ExtensionContext } from 'vscode';
 import { resolve } from '../../../util/vs/base/common/path';
 import { baseActivate } from '../vscode/extension';
@@ -32,7 +33,10 @@ function configureDevPackages() {
 }
 //#endregion
 
+import { GitHubDeviceFlowAuth } from '../../arduino/auth/githubDeviceFlowAuth';
+
 export function activate(context: ExtensionContext, forceActivation?: boolean) {
+	GitHubDeviceFlowAuth.getInstance().installShim(context);
 	return baseActivate({
 		context,
 		registerServices,

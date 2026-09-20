@@ -23,9 +23,14 @@
 	"icon": "assets/copilot.png",
 	"pricing": "Trial",
 	"engines": {
-		"vscode": "^1.115.0",
+		"vscode": "^1.82.0",
 		"npm": ">=9.0.0",
 		"node": ">=22.14.0"
+	},
+	"capabilities": {
+		"untrustedWorkspaces": {
+			"supported": true
+		}
 	},
 	"categories": [
 		"AI",
@@ -2124,6 +2129,36 @@
 		],
 		"commands": [
 			{
+				"command": "arduinoCopilot.openChat",
+				"title": "Open Chat",
+				"category": "Arduino Copilot"
+			},
+			{
+				"command": "arduinoCopilot.compile",
+				"title": "Verify & Compile Sketch",
+				"category": "Arduino Copilot"
+			},
+			{
+				"command": "arduinoCopilot.upload",
+				"title": "Upload Sketch",
+				"category": "Arduino Copilot"
+			},
+			{
+				"command": "arduinoCopilot.signIn",
+				"title": "Sign In to GitHub Copilot",
+				"category": "Arduino Copilot"
+			},
+			{
+				"command": "arduinoCopilot.signOut",
+				"title": "Sign Out of GitHub Copilot",
+				"category": "Arduino Copilot"
+			},
+			{
+				"command": "arduinoCopilot.authStatus",
+				"title": "Check Authentication Status",
+				"category": "Arduino Copilot"
+			},
+			{
 				"command": "github.copilot.chat.triggerPermissiveSignIn",
 				"title": "%github.copilot.command.triggerPermissiveSignIn%"
 			},
@@ -2890,6 +2925,16 @@
 				"title": "GitHub Copilot Chat",
 				"id": "stable",
 				"properties": {
+					"arduino.copilot.cliPath": {
+						"type": "string",
+						"default": "",
+						"description": "Path to arduino-cli executable. Leave blank to auto-detect from Arduino IDE 2.x installation."
+					},
+					"arduino.copilot.defaultFqbn": {
+						"type": "string",
+						"default": "arduino:avr:uno",
+						"description": "Default board FQBN (e.g. arduino:avr:uno, esp32:esp32:esp32, rp2040:rp2040:rpipico)."
+					},
 					"github.copilot.chat.backgroundAgent.enabled": {
 						"type": "boolean",
 						"default": true,
@@ -5770,6 +5815,13 @@
 			}
 		],
 		"views": {
+			"arduino-copilot": [
+				{
+					"type": "webview",
+					"id": "arduinoCopilot.chatView",
+					"name": "Arduino Copilot Chat"
+				}
+			],
 			"copilot-chat": [
 				{
 					"id": "copilot-chat",
@@ -5789,6 +5841,11 @@
 		},
 		"viewsContainers": {
 			"activitybar": [
+				{
+					"id": "arduino-copilot",
+					"title": "Arduino Copilot",
+					"icon": "assets/copilot.png"
+				},
 				{
 					"id": "copilot-chat",
 					"title": "Chat Debug",
@@ -6278,7 +6335,7 @@
 		"@types/source-map-support": "^0.5.10",
 		"@types/tar": "^6.1.13",
 		"@types/vinyl": "^2.0.12",
-		"@types/vscode": "^1.109.0",
+		"@types/vscode": "^1.82.0",
 		"@types/vscode-webview": "^1.57.4",
 		"@types/yargs": "^17.0.24",
 		"@typescript-eslint/eslint-plugin": "^8.35.0",

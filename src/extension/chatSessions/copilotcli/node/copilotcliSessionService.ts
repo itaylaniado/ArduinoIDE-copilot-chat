@@ -279,7 +279,7 @@ export class CopilotCLISessionService extends Disposable implements ICopilotCLIS
 				this.triggerSessionsChangeEvent();
 			}));
 		} catch (error) {
-			this.logService.error(`Failed to monitor Copilot CLI session files: ${error}`);
+			this.logService.debug(`Failed to monitor Copilot CLI session files: ${error}`);
 		}
 	}
 	async getSessionManager() {

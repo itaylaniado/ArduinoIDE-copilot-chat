@@ -23,24 +23,36 @@ export class TabsAndEditorsServiceImpl implements ITabsAndEditorsService {
 	readonly onDidChangeTabs = this._onDidChangeTabs.event;
 
 	constructor() {
+		if (!vscode.window.tabGroups) {
+			return;
+		}
+
 		// Set the activeTabGroup as the most recently used
-		const updateActiveTabGroup = () => this._tabGroupsUseInfo.set(vscode.window.tabGroups.activeTabGroup, this._tabClock++);
+		const updateActiveTabGroup = () => {
+			if (vscode.window.tabGroups?.activeTabGroup) {
+				this._tabGroupsUseInfo.set(vscode.window.tabGroups.activeTabGroup, this._tabClock++);
+			}
+		};
 
 		updateActiveTabGroup();
-		this._store.add(vscode.window.tabGroups.onDidChangeTabGroups(e => {
-			// remove all tab groups!
-			e.closed.forEach(item => this._tabGroupsUseInfo.delete(item));
+		if (typeof vscode.window.tabGroups.onDidChangeTabGroups === 'function') {
+			this._store.add(vscode.window.tabGroups.onDidChangeTabGroups(e => {
+				// remove all tab groups!
+				e.closed?.forEach(item => this._tabGroupsUseInfo.delete(item));
 
-			updateActiveTabGroup();
-		}));
+				updateActiveTabGroup();
+			}));
+		}
 
-		this._store.add(vscode.window.tabGroups.onDidChangeTabs(e => {
-			this._onDidChangeTabs.fire({
-				changed: e.changed.map(t => this._asTabInfo(t)),
-				closed: e.closed.map(t => this._asTabInfo(t)),
-				opened: e.opened.map(t => this._asTabInfo(t))
-			});
-		}));
+		if (typeof vscode.window.tabGroups.onDidChangeTabs === 'function') {
+			this._store.add(vscode.window.tabGroups.onDidChangeTabs(e => {
+				this._onDidChangeTabs.fire({
+					changed: (e.changed || []).map(t => this._asTabInfo(t)),
+					closed: (e.closed || []).map(t => this._asTabInfo(t)),
+					opened: (e.opened || []).map(t => this._asTabInfo(t))
+				});
+			}));
+		}
 	}
 
 	dispose(): void {
