@@ -579,6 +579,40 @@ export function applyTheiaVsCodeShim(vscodeObj?: any): void {
 				constructor(public callId: string, public content: any[]) {}
 			} as any;
 		}
+
+		if (vscode.languages) {
+			try {
+				if (!vscode.languages.inlineCompletionsUnificationState) {
+					vscode.languages.inlineCompletionsUnificationState = {
+						codeUnification: true,
+						modelUnification: false,
+						extensionUnification: true,
+						expAssignments: []
+					};
+				}
+				if (!vscode.languages.onDidChangeCompletionsUnificationState) {
+					vscode.languages.onDidChangeCompletionsUnificationState = () => ({ dispose: () => {} });
+				}
+			} catch {
+				try {
+					Object.defineProperty(vscode.languages, 'inlineCompletionsUnificationState', {
+						value: {
+							codeUnification: true,
+							modelUnification: false,
+							extensionUnification: true,
+							expAssignments: []
+						},
+						writable: true,
+						configurable: true
+					});
+					Object.defineProperty(vscode.languages, 'onDidChangeCompletionsUnificationState', {
+						value: () => ({ dispose: () => {} }),
+						writable: true,
+						configurable: true
+					});
+				} catch {}
+			}
+		}
 	} catch {
 		// Ignore any error in non-standard environments
 	}

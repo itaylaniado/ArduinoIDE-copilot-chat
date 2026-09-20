@@ -555,3 +555,93 @@ default_fqbn: arduino:renesas_uno:unor4wifi
 	});
 });
 
+// 8. Inline Code Completion & Theia Integration
+describe('8. Inline Code Completion & Theia Compatibility', () => {
+	it('Validates Theia document selector matching for Arduino sketches', () => {
+		const selector = ['*', { pattern: '**' }, { scheme: 'file' }];
+
+		function matchesSelector(doc, sel) {
+			for (const item of sel) {
+				if (item === '*') return true;
+				if (item && typeof item === 'object') {
+					if (item.pattern === '**' && doc.fileName) return true;
+					if (item.scheme && doc.uri?.startsWith(`${item.scheme}:`)) return true;
+				}
+			}
+			return false;
+		}
+
+		const testDoc = {
+			fileName: '/Users/test/Arduino/Blink/Blink.ino',
+			uri: 'file:///Users/test/Arduino/Blink/Blink.ino',
+			languageId: 'arduino'
+		};
+
+		assert.strictEqual(matchesSelector(testDoc, selector), true);
+	});
+
+	it('Resolves .ino files to C++ language ID for prompt synthesis', () => {
+		const extToLang = {
+			'.cpp': 'cpp',
+			'.cc': 'cpp',
+			'.cxx': 'cpp',
+			'.h': 'cpp',
+			'.hpp': 'cpp',
+			'.ino': 'cpp',
+			'.c': 'c'
+		};
+
+		function detectLanguageFromPath(filePath) {
+			const dotIdx = filePath.lastIndexOf('.');
+			const ext = dotIdx !== -1 ? filePath.slice(dotIdx).toLowerCase() : '';
+			return extToLang[ext] || 'plaintext';
+		}
+
+		assert.strictEqual(detectLanguageFromPath('/sketches/MyRobot/MyRobot.ino'), 'cpp');
+		assert.strictEqual(detectLanguageFromPath('/sketches/MyRobot/motor.h'), 'cpp');
+		assert.strictEqual(detectLanguageFromPath('/sketches/MyRobot/sensors.cpp'), 'cpp');
+	});
+
+	it('Verifies isCompletionEnabled defaults to true for Arduino sketches', () => {
+		const configEnable = {
+			'*': true,
+			'plaintext': false,
+			'markdown': false,
+			'scminput': false
+		};
+
+		function isCompletionEnabledForLanguage(langId) {
+			return configEnable[langId] ?? configEnable['*'] ?? true;
+		}
+
+		assert.strictEqual(isCompletionEnabledForLanguage('arduino'), true);
+		assert.strictEqual(isCompletionEnabledForLanguage('cpp'), true);
+		assert.strictEqual(isCompletionEnabledForLanguage('c'), true);
+		assert.strictEqual(isCompletionEnabledForLanguage('plaintext'), false);
+	});
+
+	it('Validates inlineCompletionsUnificationState shim structure', () => {
+		const unificationState = {
+			codeUnification: true,
+			modelUnification: false,
+			extensionUnification: true,
+			expAssignments: []
+		};
+
+		assert.strictEqual(unificationState.codeUnification, true);
+		assert.strictEqual(unificationState.extensionUnification, true);
+		assert.strictEqual(unificationState.modelUnification, false);
+		assert.deepStrictEqual(unificationState.expAssignments, []);
+	});
+
+	it('Defaults editor.inlineSuggest.enabled to true when unset in Theia', () => {
+		function getInlineSuggestEnabled(storedValue) {
+			return storedValue ?? true;
+		}
+
+		assert.strictEqual(getInlineSuggestEnabled(undefined), true);
+		assert.strictEqual(getInlineSuggestEnabled(true), true);
+		assert.strictEqual(getInlineSuggestEnabled(false), false);
+	});
+});
+

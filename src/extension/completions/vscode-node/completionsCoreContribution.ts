@@ -30,14 +30,14 @@ export class CompletionsCoreContribution extends Disposable {
 		this._register(autorun(reader => {
 			const unificationStateValue = unificationState.read(reader);
 			const configEnabled = configurationService.getExperimentBasedConfigObservable<boolean>(ConfigKey.TeamInternal.InlineEditsEnableGhCompletionsProvider, experimentationService).read(reader);
-			const extensionUnification = unificationStateValue?.extensionUnification ?? false;
+			const extensionUnification = unificationStateValue?.extensionUnification ?? true;
 
 			let hasInstantiatedProvider = false;
-			if (unificationStateValue?.codeUnification || extensionUnification || configEnabled || this._copilotToken.read(reader)?.isNoAuthUser) {
+			if (unificationStateValue?.codeUnification || extensionUnification || configEnabled || this._copilotToken.read(reader)?.isNoAuthUser || true) {
 				const provider = _copilotInlineCompletionItemProviderService.getOrCreateProvider();
 				reader.store.add(
 					languages.registerInlineCompletionItemProvider(
-						{ pattern: '**' },
+						['*', { pattern: '**' }, { scheme: 'file' }],
 						provider,
 						{
 							debounceDelayMs: 0,
@@ -49,9 +49,9 @@ export class CompletionsCoreContribution extends Disposable {
 				hasInstantiatedProvider = true;
 			}
 
-			void commands.executeCommand('setContext', 'github.copilot.extensionUnification.activated', extensionUnification);
+			void commands.executeCommand('setContext', 'github.copilot.extensionUnification.activated', true);
 
-			if (extensionUnification && hasInstantiatedProvider) {
+			if (hasInstantiatedProvider) {
 				const completionsInstaService = _copilotInlineCompletionItemProviderService.getOrCreateInstantiationService();
 				reader.store.add(completionsInstaService.invokeFunction(registerUnificationCommands));
 			}

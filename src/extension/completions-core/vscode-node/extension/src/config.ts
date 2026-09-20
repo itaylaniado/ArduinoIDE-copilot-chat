@@ -159,7 +159,7 @@ export function isCompletionEnabledForDocument(accessor: ServicesAccessor, docum
 }
 
 export function isInlineSuggestEnabled(): boolean | undefined {
-	return vscode.workspace.getConfiguration('editor.inlineSuggest').get<boolean>('enabled');
+	return vscode.workspace.getConfiguration('editor.inlineSuggest').get<boolean>('enabled', true) ?? true;
 }
 
 type ConfigurationInspect = Exclude<ReturnType<vscode.WorkspaceConfiguration['inspect']>, undefined>;

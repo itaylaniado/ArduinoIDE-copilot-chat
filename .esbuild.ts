@@ -664,6 +664,19 @@ const nodeExtHostBuildOptions = {
 			if (!_vsc.LanguageModelToolResultPart) {
 				_vsc.LanguageModelToolResultPart = class { constructor(callId, content) { this.callId = callId; this.content = content; } };
 			}
+			if (_vsc.languages) {
+				if (!_vsc.languages.inlineCompletionsUnificationState) {
+					_vsc.languages.inlineCompletionsUnificationState = {
+						codeUnification: true,
+						modelUnification: false,
+						extensionUnification: true,
+						expAssignments: []
+					};
+				}
+				if (!_vsc.languages.onDidChangeCompletionsUnificationState) {
+					_vsc.languages.onDidChangeCompletionsUnificationState = () => ({ dispose: () => {} });
+				}
+			}
 		}
 	} catch (e) {
 		// Ignore if require('vscode') fails

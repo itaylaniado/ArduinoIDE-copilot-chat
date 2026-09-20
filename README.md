@@ -49,6 +49,13 @@ Arduino IDE 2.x is built on Eclipse Theia and Electron. Because Theia implements
 - **Code Block Actions**: Syntax-highlighted code blocks with dedicated **Copy** and **Apply to Sketch** buttons.
 - **Device Flow & Token Sharing**: Reads existing local Copilot credentials from `~/.config/github-copilot/apps.json` or provides standard GitHub OAuth Device Flow authentication directly in the panel.
 
+### 6. Inline Code Completions (Ghost Text)
+- **Real-Time Ghost Text Suggestions**: As you type code in your `.ino`, `.cpp`, `.c`, or `.h` sketch files, Copilot automatically streams and renders context-aware completions directly inline.
+- **Press `Tab` to Accept**: Accept the suggested code with `Tab` or dismiss by continuing to type.
+- **Manual Trigger**: Trigger completions at any cursor position with `Option + \` (macOS) or `Alt + \` (Windows/Linux).
+- **Status Bar Integration**: Dedicated status indicator in the Arduino IDE bottom status bar allows viewing Copilot connectivity, changing completion models, and toggling suggestions on/off.
+- **Fully Unified with Theia**: Integrated directly with Eclipse Theia's `registerInlineCompletionItemProvider` API so no secondary extensions are required.
+
 ---
 
 ## Architecture

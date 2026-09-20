@@ -439,6 +439,20 @@ export class GitHubDeviceFlowAuth {
 			return [];
 		};
 
+		const originalOnDidChangeSessions = vsc.authentication.onDidChangeSessions;
+		vsc.authentication.onDidChangeSessions = (listener: any, thisArgs?: any, disposables?: any) => {
+			const sub = this._onDidChangeSessions.event(listener, thisArgs, disposables);
+			const origSub = (originalOnDidChangeSessions && typeof originalOnDidChangeSessions === 'function')
+				? originalOnDidChangeSessions.call(vsc.authentication, listener, thisArgs, disposables)
+				: undefined;
+			return {
+				dispose: () => {
+					try { sub?.dispose(); } catch {}
+					try { origSub?.dispose(); } catch {}
+				}
+			};
+		};
+
 		// 2. Try registering official provider with vscode.authentication
 		try {
 			if (typeof vscode.authentication.registerAuthenticationProvider === 'function') {
