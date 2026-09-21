@@ -24,7 +24,20 @@
 	const refreshBoardBtn = document.getElementById('refresh-board-btn');
 	const authBtn = document.getElementById('auth-btn');
 	const authLabel = document.getElementById('auth-label');
+	const modelSelectorBtn = document.getElementById('model-selector-btn');
+	const modelDropdownMenu = document.getElementById('model-dropdown-menu');
+	const activeModelName = document.getElementById('active-model-name');
+	const skillsBtn = document.getElementById('skills-btn');
+	const skillsCountLabel = document.getElementById('skills-count-label');
+	const skillsModalBackdrop = document.getElementById('skills-modal-backdrop');
+	const closeSkillsBtn = document.getElementById('close-skills-btn');
+	const skillsList = document.getElementById('skills-list');
+	const newSkillBtn = document.getElementById('new-skill-btn');
+
 	let isCurrentlySignedIn = authBtn ? authBtn.classList.contains('signed-in') : false;
+	let currentAvailableModels = [];
+	let currentSelectedModel = 'gpt-4o';
+	let currentSkills = [];
 
 	if (authBtn) {
 		authBtn.addEventListener('click', () => {
@@ -36,11 +49,63 @@
 		});
 	}
 
+	// Model Dropdown Toggle & Selection
+	if (modelSelectorBtn && modelDropdownMenu) {
+		modelSelectorBtn.addEventListener('click', (e) => {
+			e.stopPropagation();
+			const isOpen = modelDropdownMenu.classList.toggle('open');
+			if (isOpen) {
+				vscode.postMessage({ command: 'getModels' });
+			}
+		});
+
+		document.addEventListener('click', (e) => {
+			if (!modelSelectorBtn.contains(e.target) && !modelDropdownMenu.contains(e.target)) {
+				modelDropdownMenu.classList.remove('open');
+			}
+		});
+	}
+
+	// Skills Modal Toggle
+	if (skillsBtn && skillsModalBackdrop) {
+		skillsBtn.addEventListener('click', () => {
+			skillsModalBackdrop.classList.add('open');
+			vscode.postMessage({ command: 'getSkills' });
+		});
+
+		if (closeSkillsBtn) {
+			closeSkillsBtn.addEventListener('click', () => {
+				skillsModalBackdrop.classList.remove('open');
+			});
+		}
+
+		skillsModalBackdrop.addEventListener('click', (e) => {
+			if (e.target === skillsModalBackdrop) {
+				skillsModalBackdrop.classList.remove('open');
+			}
+		});
+	}
+
+	if (newSkillBtn) {
+		newSkillBtn.addEventListener('click', () => {
+			const name = prompt('Skill Name (e.g. Stepper Motor Control):');
+			if (!name || !name.trim()) return;
+			const description = prompt('Brief description (e.g. Wiring rules and timing guidelines for A4988 driver):') || '';
+			vscode.postMessage({
+				command: 'createSkill',
+				name: name.trim(),
+				description: description.trim()
+			});
+		});
+	}
+
 	let currentAssistantBubble = null;
 	let currentAssistantText = '';
 
-	// Request initial auth status
+	// Request initial auth status, models, and skills
 	vscode.postMessage({ command: 'getAuthStatus' });
+	vscode.postMessage({ command: 'getModels' });
+	vscode.postMessage({ command: 'getSkills' });
 
 	// Handle sending messages
 	function sendCurrentMessage() {
@@ -240,8 +305,112 @@
 				}
 				break;
 			}
+			case 'updateModels': {
+				currentAvailableModels = message.models || [];
+				currentSelectedModel = message.selectedModel || 'gpt-4o';
+				renderModelPicker(currentAvailableModels, currentSelectedModel);
+				break;
+			}
+			case 'updateSkills': {
+				currentSkills = message.skills || [];
+				renderSkillsList(currentSkills);
+				break;
+			}
 		}
 	});
+
+	function renderModelPicker(models, selected) {
+		if (activeModelName) {
+			const found = models.find(m => m.id === selected);
+			activeModelName.textContent = found ? found.name : selected;
+		}
+
+		if (!modelDropdownMenu) return;
+		modelDropdownMenu.innerHTML = '';
+
+		models.forEach(model => {
+			const item = document.createElement('div');
+			item.className = 'model-dropdown-item' + (model.id === selected ? ' active' : '');
+			item.innerHTML = `
+				<span>${escapeHtml(model.name)}</span>
+				<span class="model-vendor">${escapeHtml(model.vendor || '')}</span>
+			`;
+			item.addEventListener('click', () => {
+				modelDropdownMenu.classList.remove('open');
+				vscode.postMessage({
+					command: 'selectModel',
+					modelId: model.id,
+					modelName: model.name
+				});
+			});
+			modelDropdownMenu.appendChild(item);
+		});
+	}
+
+	function renderSkillsList(skills) {
+		const activeCount = skills.filter(s => s.enabled).length;
+		if (skillsCountLabel) {
+			skillsCountLabel.textContent = `Skills (${activeCount})`;
+		}
+
+		if (!skillsList) return;
+		skillsList.innerHTML = '';
+
+		if (skills.length === 0) {
+			skillsList.innerHTML = '<div style="color:#8c939d; padding:10px; text-align:center;">No skills loaded.</div>';
+			return;
+		}
+
+		skills.forEach(skill => {
+			const card = document.createElement('div');
+			card.className = 'skill-card' + (skill.enabled ? ' enabled' : '');
+
+			const header = document.createElement('div');
+			header.className = 'skill-card-header';
+
+			const nameDiv = document.createElement('div');
+			nameDiv.className = 'skill-card-name';
+			nameDiv.innerHTML = `
+				<span>${escapeHtml(skill.name)}</span>
+				<span class="skill-card-badge ${skill.isBuiltIn ? '' : 'custom'}">${skill.isBuiltIn ? 'Built-in' : 'Custom'}</span>
+			`;
+
+			const toggleWrapper = document.createElement('div');
+			toggleWrapper.className = 'skill-toggle-wrapper';
+
+			const label = document.createElement('label');
+			label.className = 'skill-switch';
+
+			const input = document.createElement('input');
+			input.type = 'checkbox';
+			input.checked = !!skill.enabled;
+			input.addEventListener('change', () => {
+				vscode.postMessage({
+					command: 'toggleSkill',
+					skillId: skill.id,
+					enabled: input.checked
+				});
+			});
+
+			const slider = document.createElement('span');
+			slider.className = 'skill-slider';
+
+			label.appendChild(input);
+			label.appendChild(slider);
+			toggleWrapper.appendChild(label);
+
+			header.appendChild(nameDiv);
+			header.appendChild(toggleWrapper);
+
+			const desc = document.createElement('div');
+			desc.className = 'skill-card-desc';
+			desc.textContent = skill.description;
+
+			card.appendChild(header);
+			card.appendChild(desc);
+			skillsList.appendChild(card);
+		});
+	}
 
 	function appendUserMessage(text) {
 		if (!messagesContainer) return;

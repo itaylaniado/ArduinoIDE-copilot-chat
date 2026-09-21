@@ -9,6 +9,42 @@
  */
 export function applyTheiaVsCodeShim(vscodeObj?: any): void {
 	try {
+		// Polyfill global performance User Timing API if missing or incomplete in Theia / Electron
+		if (typeof globalThis !== 'undefined') {
+			const g = globalThis as any;
+			if (!g.performance) {
+				g.performance = {};
+			}
+			if (typeof g.performance.now !== 'function') {
+				g.performance.now = () => Date.now();
+			}
+			if (typeof g.performance.mark !== 'function') {
+				const marks = new Map<string, any>();
+				g.performance.mark = (name: string, opts?: { startTime?: number }) => {
+					const start = opts?.startTime ?? g.performance.now();
+					const entry = { name, entryType: 'mark', startTime: start, duration: 0 };
+					marks.set(name, entry);
+					return entry;
+				};
+				g.performance.getEntries = () => Array.from(marks.values());
+				g.performance.getEntriesByType = (type: string) => type === 'mark' ? Array.from(marks.values()) : [];
+				g.performance.getEntriesByName = (name: string) => marks.has(name) ? [marks.get(name)] : [];
+				g.performance.clearMarks = (name?: string) => {
+					if (name) {
+						marks.delete(name);
+					} else {
+						marks.clear();
+					}
+				};
+				if (typeof g.performance.measure !== 'function') {
+					g.performance.measure = () => ({});
+				}
+				if (typeof g.performance.clearMeasures !== 'function') {
+					g.performance.clearMeasures = () => {};
+				}
+			}
+		}
+
 		const vscode = vscodeObj || (typeof require === 'function' ? require('vscode') : null);
 		if (!vscode) {
 			return;

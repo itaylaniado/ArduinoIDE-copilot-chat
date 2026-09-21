@@ -56,6 +56,21 @@ Arduino IDE 2.x is built on Eclipse Theia and Electron. Because Theia implements
 - **Status Bar Integration**: Dedicated status indicator in the Arduino IDE bottom status bar allows viewing Copilot connectivity, changing completion models, and toggling suggestions on/off.
 - **Fully Unified with Theia**: Integrated directly with Eclipse Theia's `registerInlineCompletionItemProvider` API so no secondary extensions are required.
 
+### 7. Dynamic Model Discovery & Enterprise Endpoints
+- **Copilot `/models` Discovery**: Dynamically queries GitHub Copilot's `/models` endpoint to discover entitled models available on your subscription.
+- **Header Model Picker**: Convenient dropdown menu in the chat header allowing instant switching between **GPT-4o**, **Claude 3.5 Sonnet**, **o1-mini**, and **GPT-4o mini**.
+- **Enterprise & Business Endpoint Resolution**: Easily route completions and token management to custom GitHub Enterprise servers or business endpoints via `arduino.copilot.apiBaseUrl` or the `COPILOT_API_URL` environment variable.
+
+### 8. Extensible Agent Skills System
+- **Built-in Physical Computing Skills**: Shipped with 5 specialized embedded development skills that guide Copilot's reasoning and code generation:
+  - 📌 **Pinout & Hardware Safety Advisor**: Prevents 5V/3.3V logic level mismatches, verifies dedicated I2C/SPI bus pins, and enforces GPIO sink/source current limits.
+  - 📚 **Library & Dependency Helper**: Recommends vetted community libraries, correct `#include` syntax, and architecture-specific portability advice.
+  - ⏱️ **Non-Blocking Timing & State Machines**: Eliminates blocking `delay()` calls in favor of robust `millis()` timestamp tracking and FSMs.
+  - 📊 **Serial Telemetry & Plotter Formatter**: Formats multi-variable data for the Arduino IDE Serial Plotter and ensures SRAM optimization with `F()`.
+  - 🔋 **Low-Power & Battery IoT Expert**: Configures sleep modes, watchdog wake-ups, and peripheral power-down states.
+- **User-Defined Custom Skills**: Augment Copilot with your own domain guidelines! Place Markdown files with YAML frontmatter in `<sketchFolder>/.skills/*.md` or `~/.arduinoIDE/skills/*.md`.
+- **Interactive Skills Drawer**: Click the **🧠 Skills** button in the chat header to toggle skills on or off, or click **➕ New Custom Skill** to scaffold a new skill template file inside your sketch.
+
 ---
 
 ## Architecture

@@ -10,6 +10,8 @@ import { IArduinoCliService, ArduinoCliService } from '../../arduino/services/ar
 import { IBoardContextService, BoardContextService } from '../../arduino/services/boardContextService';
 import { ISketchService, SketchService } from '../../arduino/services/sketchService';
 import { ISerialTelemetryService, SerialTelemetryService } from '../../arduino/services/serialTelemetryService';
+import { ISkillsService, SkillsService } from '../../arduino/services/skillsService';
+import { ICopilotApiService, CopilotApiService } from '../../arduino/services/copilotApiService';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
 import { ICopilotTokenManager } from '../../../platform/authentication/common/copilotTokenManager';
 import { StaticGitHubAuthenticationService } from '../../../platform/authentication/common/staticGitHubAuthenticationService';
@@ -268,6 +270,8 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(IBoardContextService, new SyncDescriptor(BoardContextService));
 	builder.define(ISketchService, new SyncDescriptor(SketchService));
 	builder.define(ISerialTelemetryService, new SyncDescriptor(SerialTelemetryService));
+	builder.define(ISkillsService, new SyncDescriptor(SkillsService));
+	builder.define(ICopilotApiService, new SyncDescriptor(CopilotApiService));
 	builder.define(IUndesiredModelsManager, new SyncDescriptor(UndesiredModels.Manager));
 	builder.define(ICopilotInlineCompletionItemProviderService, new SyncDescriptor(CopilotInlineCompletionItemProviderService));
 	builder.define(ISimilarFilesContextService, new SyncDescriptor(SimilarFilesContextService));

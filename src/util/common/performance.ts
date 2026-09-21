@@ -10,18 +10,50 @@ interface IMonacoPerformanceMarks {
 }
 
 function _getNativePolyfill(): IMonacoPerformanceMarks {
+	const inMemoryMarks: Array<{ name: string; startTime: number }> = [];
+
 	return {
-		mark: (name, markOptions) => performance.mark(name, markOptions),
-		getMarks: () => performance.getEntries().filter(e => e.entryType === 'mark').map(e => ({ name: e.name, startTime: e.startTime })),
-		clearMarks: prefix => {
-			const toRemove = new Set<string>();
-			for (const entry of performance.getEntries()) {
-				if (entry.entryType === 'mark' && entry.name.startsWith(prefix)) {
-					toRemove.add(entry.name);
-				}
+		mark: (name, markOptions) => {
+			const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+				? performance.now()
+				: Date.now();
+			const startTime = markOptions?.startTime ?? now;
+
+			if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+				try {
+					performance.mark(name, markOptions);
+					return;
+				} catch {}
 			}
-			for (const name of toRemove) {
-				performance.clearMarks(name);
+
+			inMemoryMarks.push({ name, startTime });
+		},
+		getMarks: () => {
+			if (typeof performance !== 'undefined' && typeof performance.getEntries === 'function') {
+				try {
+					return performance.getEntries().filter(e => e.entryType === 'mark').map(e => ({ name: e.name, startTime: e.startTime }));
+				} catch {}
+			}
+			return [...inMemoryMarks];
+		},
+		clearMarks: prefix => {
+			if (typeof performance !== 'undefined' && typeof performance.clearMarks === 'function') {
+				try {
+					if (typeof performance.getEntries === 'function') {
+						for (const entry of performance.getEntries()) {
+							if (entry.entryType === 'mark' && entry.name.startsWith(prefix)) {
+								performance.clearMarks(entry.name);
+							}
+						}
+					} else {
+						performance.clearMarks(prefix);
+					}
+				} catch {}
+			}
+			for (let i = inMemoryMarks.length - 1; i >= 0; i--) {
+				if (inMemoryMarks[i].name.startsWith(prefix)) {
+					inMemoryMarks.splice(i, 1);
+				}
 			}
 		},
 	};

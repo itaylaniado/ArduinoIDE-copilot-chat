@@ -3,6 +3,7 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
+import * as vscode from 'vscode';
 import * as https from 'https';
 import { URL } from 'url';
 import { createServiceIdentifier } from '../../../util/common/services';
@@ -36,6 +37,21 @@ export interface ChatCompletionResponse {
 	content: string;
 	toolCalls?: ToolCallResult[];
 }
+
+export interface CopilotModelInfo {
+	id: string;
+	name: string;
+	vendor?: string;
+	version?: string;
+	isDefault?: boolean;
+}
+
+export const FALLBACK_COPILOT_MODELS: CopilotModelInfo[] = [
+	{ id: 'gpt-4o', name: 'GPT-4o', vendor: 'OpenAI / Azure', isDefault: true },
+	{ id: 'claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', vendor: 'Anthropic' },
+	{ id: 'o1-mini', name: 'o1-mini', vendor: 'OpenAI / Azure' },
+	{ id: 'gpt-4o-mini', name: 'GPT-4o mini', vendor: 'OpenAI / Azure' }
+];
 
 export const EDIT_SKETCH_FILE_TOOL: ToolDefinition = {
 	type: 'function',
@@ -93,6 +109,10 @@ export interface CopilotTokenData {
 export interface ICopilotApiService {
 	readonly _serviceBrand: undefined;
 	getCopilotToken(forceRefresh?: boolean): Promise<{ token: string; apiEndpoint: string }>;
+	getAvailableModels(forceRefresh?: boolean): Promise<CopilotModelInfo[]>;
+	getSelectedModel(): string;
+	setSelectedModel(modelId: string): void;
+	getApiBaseUrl(tokenApiEndpoint?: string): string;
 	streamChat(
 		messages: ChatMessageParam[],
 		onChunk: (chunk: string) => void,
@@ -112,9 +132,128 @@ export class CopilotApiService extends Disposable implements ICopilotApiService 
 	declare _serviceBrand: undefined;
 
 	private _cachedTokenData: CopilotTokenData | undefined;
+	private _cachedModels: { models: CopilotModelInfo[]; timestamp: number } | undefined;
+	private _selectedModel: string = 'gpt-4o';
 
 	constructor() {
 		super();
+	}
+
+	/**
+	 * Resolve effective Copilot API Base URL honoring user settings, environment variables,
+	 * and ephemeral token endpoints (e.g. api.business.githubcopilot.com).
+	 */
+	public getApiBaseUrl(tokenApiEndpoint?: string): string {
+		// 1. User configuration setting
+		try {
+			const config = vscode.workspace.getConfiguration('arduino.copilot');
+			const configuredUrl = config.get<string>('apiBaseUrl');
+			if (configuredUrl && configuredUrl.trim().length > 0) {
+				return configuredUrl.trim().replace(/\/+$/, '');
+			}
+		} catch {}
+
+		// 2. Environment variable overrides (e.g. COPILOT_API_URL or GITHUB_COPILOT_BASE_URL)
+		const envUrl = process.env.COPILOT_API_URL || process.env.GITHUB_COPILOT_BASE_URL;
+		if (envUrl && envUrl.trim().length > 0) {
+			return envUrl.trim().replace(/\/+$/, '');
+		}
+
+		// 3. Token endpoints API from GitHub internal auth
+		if (tokenApiEndpoint && tokenApiEndpoint.trim().length > 0) {
+			return tokenApiEndpoint.trim().replace(/\/+$/, '');
+		}
+
+		// 4. Default standard endpoint
+		return 'https://api.individual.githubcopilot.com';
+	}
+
+	public getSelectedModel(): string {
+		try {
+			const config = vscode.workspace.getConfiguration('arduino.copilot');
+			const model = config.get<string>('model');
+			if (model && model.trim().length > 0) {
+				return model.trim();
+			}
+		} catch {}
+		return this._selectedModel || 'gpt-4o';
+	}
+
+	public setSelectedModel(modelId: string): void {
+		this._selectedModel = modelId;
+		try {
+			const config = vscode.workspace.getConfiguration('arduino.copilot');
+			config.update('model', modelId, vscode.ConfigurationTarget.Global);
+		} catch {}
+	}
+
+	/**
+	 * Dynamically discover models available from the Copilot API endpoint (/models).
+	 * Falls back gracefully to standard supported models if unavailable or offline.
+	 */
+	public async getAvailableModels(forceRefresh = false): Promise<CopilotModelInfo[]> {
+		const now = Date.now();
+		if (!forceRefresh && this._cachedModels && (now - this._cachedModels.timestamp < 10 * 60 * 1000)) {
+			return this._cachedModels.models;
+		}
+
+		try {
+			const tokenInfo = await this.getCopilotToken();
+			const url = new URL('/models', tokenInfo.apiEndpoint);
+
+			const models = await new Promise<CopilotModelInfo[]>((resolve, reject) => {
+				const req = https.get(url.href, {
+					headers: {
+						'Authorization': `Bearer ${tokenInfo.token}`,
+						'User-Agent': 'GitHubCopilotChat/0.44.0',
+						'Editor-Version': 'vscode/1.95.0',
+						'Editor-Plugin-Version': 'copilot-chat/0.44.0',
+						'Accept': 'application/json'
+					}
+				}, (res) => {
+					let body = '';
+					res.on('data', c => body += c);
+					res.on('end', () => {
+						if (res.statusCode !== 200) {
+							return reject(new Error(`Models endpoint returned HTTP ${res.statusCode}`));
+						}
+						try {
+							const parsed = JSON.parse(body);
+							const list = Array.isArray(parsed.data) ? parsed.data : (Array.isArray(parsed) ? parsed : []);
+							const result: CopilotModelInfo[] = [];
+
+							for (const item of list) {
+								if (item.id) {
+									result.push({
+										id: item.id,
+										name: item.name || item.id,
+										vendor: item.vendor || (item.id.includes('claude') ? 'Anthropic' : 'OpenAI'),
+										version: item.version,
+										isDefault: item.id === 'gpt-4o'
+									});
+								}
+							}
+
+							if (result.length > 0) {
+								resolve(result);
+							} else {
+								resolve(FALLBACK_COPILOT_MODELS);
+							}
+						} catch (err: any) {
+							reject(err);
+						}
+					});
+				});
+
+				req.on('error', reject);
+			});
+
+			this._cachedModels = { models, timestamp: now };
+			return models;
+		} catch (err) {
+			console.warn('[CopilotApiService] Could not fetch models from Copilot API, using standard fallback models:', err);
+			return FALLBACK_COPILOT_MODELS;
+		}
 	}
 
 	/**
@@ -126,7 +265,7 @@ export class CopilotApiService extends Disposable implements ICopilotApiService 
 		const nowSec = Math.floor(Date.now() / 1000);
 
 		if (!forceRefresh && this._cachedTokenData && nowSec < this._cachedTokenData.expires_at - 120) {
-			const apiEndpoint = this._cachedTokenData.endpoints?.api || 'https://api.individual.githubcopilot.com';
+			const apiEndpoint = this.getApiBaseUrl(this._cachedTokenData.endpoints?.api);
 			return { token: this._cachedTokenData.token, apiEndpoint };
 		}
 
@@ -148,19 +287,20 @@ export class CopilotApiService extends Disposable implements ICopilotApiService 
 		const tokenData = await this.fetchCopilotInternalToken(oauthToken);
 		this._cachedTokenData = tokenData;
 
-		const apiEndpoint = tokenData.endpoints?.api || 'https://api.individual.githubcopilot.com';
+		const apiEndpoint = this.getApiBaseUrl(tokenData.endpoints?.api);
 		return { token: tokenData.token, apiEndpoint };
 	}
 
 	/**
-	 * Stream chat completions from the official Copilot chat API (e.g. gpt-4o).
+	 * Stream chat completions from the official Copilot chat API.
 	 */
 	public async streamChat(
 		messages: ChatMessageParam[],
 		onChunk: (chunk: string) => void,
-		model = 'gpt-4o'
+		model?: string
 	): Promise<string> {
-		const res = await this.streamChatWithTools(messages, onChunk, undefined, model);
+		const effectiveModel = model || this.getSelectedModel();
+		const res = await this.streamChatWithTools(messages, onChunk, undefined, effectiveModel);
 		return res.content;
 	}
 
@@ -171,20 +311,20 @@ export class CopilotApiService extends Disposable implements ICopilotApiService 
 		messages: ChatMessageParam[],
 		onChunk: (chunk: string) => void,
 		tools?: ToolDefinition[],
-		model = 'gpt-4o'
+		model?: string
 	): Promise<ChatCompletionResponse> {
+		const effectiveModel = model || this.getSelectedModel();
 		let tokenInfo = await this.getCopilotToken();
 
 		try {
-			return await this.executeStreamChat(tokenInfo, messages, onChunk, tools, model);
+			return await this.executeStreamChat(tokenInfo, messages, onChunk, tools, effectiveModel);
 		} catch (error: any) {
 			// If 401 Unauthorized, refresh token and retry once
 			if (error?.message && error.message.includes('401')) {
 				console.warn('[CopilotApiService] Token expired or rejected (401). Refreshing token and retrying...');
 				tokenInfo = await this.getCopilotToken(true);
-				return await this.executeStreamChat(tokenInfo, messages, onChunk, tools, model);
+				return await this.executeStreamChat(tokenInfo, messages, onChunk, tools, effectiveModel);
 			}
-			throw error;
 		}
 	}
 
@@ -334,7 +474,20 @@ export class CopilotApiService extends Disposable implements ICopilotApiService 
 
 	private fetchCopilotInternalToken(oauthToken: string): Promise<CopilotTokenData> {
 		return new Promise((resolve, reject) => {
-			const req = https.get('https://api.github.com/copilot_internal/v2/token', {
+			let tokenUrl = 'https://api.github.com/copilot_internal/v2/token';
+			try {
+				const config = vscode.workspace.getConfiguration('arduino.copilot');
+				const enterpriseHost = config.get<string>('enterpriseUrl');
+				if (enterpriseHost && enterpriseHost.trim().length > 0) {
+					tokenUrl = `${enterpriseHost.trim().replace(/\/+$/, '')}/api/v3/copilot_internal/v2/token`;
+				}
+			} catch {}
+
+			const parsedUrl = new URL(tokenUrl);
+			const req = https.get({
+				hostname: parsedUrl.hostname,
+				port: parsedUrl.port || 443,
+				path: parsedUrl.pathname,
 				headers: {
 					'Authorization': `token ${oauthToken}`,
 					'User-Agent': 'GitHubCopilotChat/0.44.0',

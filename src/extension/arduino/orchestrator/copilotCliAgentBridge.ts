@@ -11,6 +11,7 @@ import { IBoardContextService } from '../services/boardContextService';
 import { ISketchService } from '../services/sketchService';
 import { ISerialTelemetryService } from '../services/serialTelemetryService';
 import { ICopilotApiService, CopilotApiService, ChatMessageParam, EDIT_SKETCH_FILE_TOOL, SET_ACTIVE_BOARD_TOOL } from '../services/copilotApiService';
+import { ISkillsService, SkillsService } from '../services/skillsService';
 import { ArduinoToolsRegistry } from '../tools';
 
 export interface FileEditNotification {
@@ -50,7 +51,8 @@ export class CopilotCliAgentBridge extends Disposable {
 		private readonly boardContextService: IBoardContextService,
 		private readonly sketchService: ISketchService,
 		private readonly serialTelemetryService: ISerialTelemetryService,
-		private readonly copilotApiService: ICopilotApiService = new CopilotApiService()
+		private readonly copilotApiService: ICopilotApiService = new CopilotApiService(),
+		private readonly skillsService: ISkillsService = new SkillsService(sketchService)
 	) {
 		super();
 		this._toolsRegistry = new ArduinoToolsRegistry(
@@ -109,9 +111,22 @@ export class CopilotCliAgentBridge extends Disposable {
 			`2. For AVR boards (e.g. Uno, Nano, Mega), preserve SRAM by using the F() macro: Serial.print(F("text")).\n` +
 			`3. Avoid blocking delay() calls in loops; use non-blocking millis() timing whenever responsive behavior is needed.\n` +
 			`4. Always observe board logic levels (e.g. 3.3V vs 5V) and warn if external components require level shifters or pull-ups.\n` +
-			`5. You have access to Arduino tools (arduino_compile, arduino_fix_compile_errors, arduino_upload, arduino_library_manager, arduino_pinout_checker, arduino_crash_decoder, arduino_circuit_diagram).\n`;
+			`5. You have access to Arduino tools (arduino_compile, arduino_fix_compile_errors, arduino_upload, arduino_library_manager, arduino_pinout_checker, arduino_crash_decoder, arduino_circuit_diagram).\n\n`;
+
+		const skillsPrompt = await this.skillsService.buildSkillsPrompt();
+		if (skillsPrompt) {
+			prompt += `${skillsPrompt}\n`;
+		}
 
 		return prompt;
+	}
+
+	public getSkillsService(): ISkillsService {
+		return this.skillsService;
+	}
+
+	public getCopilotApiService(): ICopilotApiService {
+		return this.copilotApiService;
 	}
 
 	/**
@@ -141,6 +156,8 @@ export class CopilotCliAgentBridge extends Disposable {
 			return await this.handleCircuitCommand(prompt, replyMessageId);
 		} else if (lower.startsWith('set board') || lower.startsWith('switch board') || lower.startsWith('board:') || lower.startsWith('use board') || lower.startsWith('change board')) {
 			return await this.handleSetBoardCommand(prompt, replyMessageId);
+		} else if (lower === '/skills' || lower === 'skills' || lower === '/skill') {
+			return await this.handleListSkillsCommand(replyMessageId);
 		}
 
 		// Standard Conversational Flow using @github/copilot/sdk if available or domain generator
@@ -215,10 +232,12 @@ export class CopilotCliAgentBridge extends Disposable {
 			];
 
 			let editApplied = false;
+			const activeModel = this.copilotApiService.getSelectedModel();
 			const compRes = await this.copilotApiService.streamChatWithTools(
 				messages,
 				chunk => this.streamChunk(messageId, chunk),
-				[EDIT_SKETCH_FILE_TOOL]
+				[EDIT_SKETCH_FILE_TOOL],
+				activeModel
 			);
 
 			if (compRes.toolCalls && compRes.toolCalls.length > 0) {
@@ -439,6 +458,30 @@ export class CopilotCliAgentBridge extends Disposable {
 		return response;
 	}
 
+	private async handleListSkillsCommand(messageId: string): Promise<string> {
+		this._onDidUpdateToolStatus.fire({ messageId, toolName: 'arduino_skills', status: 'running' });
+
+		const skills = await this.skillsService.getSkills();
+		this._onDidUpdateToolStatus.fire({ messageId, toolName: 'arduino_skills', status: 'done', result: `${skills.filter(s => s.enabled).length} active` });
+
+		let response = `### 🧠 Arduino Agent Skills\n\n` +
+			`Copilot has the following embedded development skills configured:\n\n` +
+			`| Skill | Type | Status | Description |\n` +
+			`| :--- | :--- | :--- | :--- |\n`;
+
+		for (const s of skills) {
+			const type = s.isBuiltIn ? 'Built-in' : 'User';
+			const status = s.enabled ? '✅ Enabled' : '⚪ Disabled';
+			response += `| **${s.name}** | ${type} | ${status} | ${s.description} |\n`;
+		}
+
+		response += `\n*Tip: Click the **🧠 Skills** button in the chat header to toggle skills or create your own custom skill template in \`.skills/\`.*`;
+
+		this.streamChunk(messageId, response);
+		this.recordAssistantMessage(messageId, response);
+		return response;
+	}
+
 	private async handleGeneralConversation(prompt: string, messageId: string): Promise<string> {
 		try {
 			const systemPrompt = await this.buildSystemPrompt();
@@ -460,13 +503,15 @@ export class CopilotCliAgentBridge extends Disposable {
 			messages.push({ role: 'user', content: prompt });
 
 			let fullResponse = '';
+			const activeModel = this.copilotApiService.getSelectedModel();
 			const compRes = await this.copilotApiService.streamChatWithTools(
 				messages,
 				(chunk) => {
 					fullResponse += chunk;
 					this.streamChunk(messageId, chunk);
 				},
-				[EDIT_SKETCH_FILE_TOOL, SET_ACTIVE_BOARD_TOOL]
+				[EDIT_SKETCH_FILE_TOOL, SET_ACTIVE_BOARD_TOOL],
+				activeModel
 			);
 
 			if (compRes.toolCalls && compRes.toolCalls.length > 0) {

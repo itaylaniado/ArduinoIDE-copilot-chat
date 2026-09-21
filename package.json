@@ -2935,6 +2935,26 @@
 						"default": "arduino:avr:uno",
 						"description": "Default board FQBN (e.g. arduino:avr:uno, esp32:esp32:esp32, rp2040:rp2040:rpipico)."
 					},
+					"arduino.copilot.apiBaseUrl": {
+						"type": "string",
+						"default": "",
+						"description": "Custom GitHub Copilot completions API base URL (e.g. for GitHub Enterprise or corporate proxy routing). Leave empty for default."
+					},
+					"arduino.copilot.enterpriseUrl": {
+						"type": "string",
+						"default": "",
+						"description": "Custom GitHub Enterprise base URL (e.g. https://github.mycompany.com) for authentication and token exchange."
+					},
+					"arduino.copilot.model": {
+						"type": "string",
+						"default": "gpt-4o",
+						"description": "Active AI Model for Arduino Copilot (e.g. gpt-4o, claude-3.5-sonnet, o1-mini)."
+					},
+					"arduino.copilot.customSkillsPath": {
+						"type": "string",
+						"default": "",
+						"description": "Custom directory path containing markdown skill files (.md) to augment Arduino Copilot."
+					},
 					"github.copilot.chat.backgroundAgent.enabled": {
 						"type": "boolean",
 						"default": true,

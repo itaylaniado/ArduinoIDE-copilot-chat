@@ -11,6 +11,9 @@ import { SketchService } from '../services/sketchService.ts';
 import { SerialTelemetryService } from '../services/serialTelemetryService.ts';
 import { ArduinoFixErrorsTool } from '../tools/arduinoFixErrorsTool.ts';
 import { ArduinoCircuitDiagramTool } from '../tools/arduinoCircuitDiagramTool.ts';
+import { markChatExtGlobal, ChatExtGlobalPerfMark, getChatExtMarks, clearChatExtMarks, markChatExt, ChatExtPerfMark } from '../../../util/common/performance.ts';
+import { applyTheiaVsCodeShim } from '../../../util/common/shims/theiaVsCodeShim.ts';
+import './skillsService.spec.ts';
 
 describe('Arduino Core Features Verification', () => {
 	it('Validates Board Profiles and PWM pin capabilities', () => {
@@ -108,5 +111,27 @@ Backtrace:0x400d1234:0x3ffb0000 0x400d5678:0x3ffb0020
 		assert.ok(result.wiringTable.length >= 3);
 		assert.match(result.mermaidDiagram, /graph LR/);
 		assert.match(result.asciiDiagram, /VCC/);
+	});
+
+	it('Handles performance.mark gracefully even in Theia / headless environments without native User Timing API', () => {
+		applyTheiaVsCodeShim();
+		assert.strictEqual(typeof globalThis.performance.mark, 'function');
+		assert.strictEqual(typeof globalThis.performance.getEntries, 'function');
+		assert.strictEqual(typeof globalThis.performance.clearMarks, 'function');
+
+		assert.doesNotThrow(() => {
+			markChatExtGlobal(ChatExtGlobalPerfMark.WillActivate);
+			markChatExtGlobal(ChatExtGlobalPerfMark.DidActivate);
+		});
+
+		const testSessionId = 'test-session-perf-123';
+		assert.doesNotThrow(() => {
+			markChatExt(testSessionId, ChatExtPerfMark.WillHandleParticipant);
+			clearChatExtMarks(testSessionId);
+		});
+
+		const marks = getChatExtMarks();
+		assert.ok(Array.isArray(marks));
+		assert.ok(marks.some(m => m.name.includes(ChatExtGlobalPerfMark.WillActivate)));
 	});
 });

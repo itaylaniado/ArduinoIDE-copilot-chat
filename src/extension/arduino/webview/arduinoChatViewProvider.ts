@@ -10,6 +10,8 @@ import { IArduinoCliService } from '../services/arduinoCliService';
 import { IBoardContextService } from '../services/boardContextService';
 import { ISketchService } from '../services/sketchService';
 import { ISerialTelemetryService } from '../services/serialTelemetryService';
+import { ISkillsService, SkillsService } from '../services/skillsService';
+import { ICopilotApiService, CopilotApiService } from '../services/copilotApiService';
 import { CopilotCliAgentBridge } from '../orchestrator/copilotCliAgentBridge';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { createServiceIdentifier } from '../../../util/common/services';
@@ -34,14 +36,18 @@ export class ArduinoChatViewProvider extends Disposable implements vscode.Webvie
 		@IArduinoCliService private readonly arduinoCliService: IArduinoCliService,
 		@IBoardContextService private readonly boardContextService: IBoardContextService,
 		@ISketchService private readonly sketchService: ISketchService,
-		@ISerialTelemetryService private readonly serialTelemetryService: ISerialTelemetryService
+		@ISerialTelemetryService private readonly serialTelemetryService: ISerialTelemetryService,
+		@ISkillsService private readonly skillsService: ISkillsService = new SkillsService(sketchService),
+		@ICopilotApiService private readonly copilotApiService: ICopilotApiService = new CopilotApiService()
 	) {
 		super();
 		this._agentBridge = this._register(new CopilotCliAgentBridge(
 			this.arduinoCliService,
 			this.boardContextService,
 			this.sketchService,
-			this.serialTelemetryService
+			this.serialTelemetryService,
+			this.copilotApiService,
+			this.skillsService
 		));
 
 		// Pipe streaming events from Agent Bridge to Webview
@@ -153,6 +159,75 @@ export class ArduinoChatViewProvider extends Disposable implements vscode.Webvie
 						signedIn: !!session,
 						user: session?.account.label || ''
 					});
+					break;
+				}
+				case 'getModels': {
+					try {
+						const models = await this.copilotApiService.getAvailableModels();
+						const selectedModel = this.copilotApiService.getSelectedModel();
+						this._view?.webview.postMessage({
+							type: 'updateModels',
+							models,
+							selectedModel
+						});
+					} catch (err: any) {
+						console.error('[ArduinoChatViewProvider] Failed to get models:', err);
+					}
+					break;
+				}
+				case 'selectModel': {
+					if (message.modelId) {
+						this.copilotApiService.setSelectedModel(message.modelId);
+						const models = await this.copilotApiService.getAvailableModels();
+						const selectedModel = this.copilotApiService.getSelectedModel();
+						this._view?.webview.postMessage({
+							type: 'updateModels',
+							models,
+							selectedModel
+						});
+						vscode.window.showInformationMessage(`Copilot model switched to ${message.modelName || message.modelId}`);
+					}
+					break;
+				}
+				case 'getSkills': {
+					try {
+						const skills = await this.skillsService.getSkills();
+						this._view?.webview.postMessage({
+							type: 'updateSkills',
+							skills
+						});
+					} catch (err: any) {
+						console.error('[ArduinoChatViewProvider] Failed to get skills:', err);
+					}
+					break;
+				}
+				case 'toggleSkill': {
+					if (message.skillId !== undefined) {
+						await this.skillsService.toggleSkill(message.skillId, !!message.enabled);
+						const skills = await this.skillsService.getSkills();
+						this._view?.webview.postMessage({
+							type: 'updateSkills',
+							skills
+						});
+					}
+					break;
+				}
+				case 'createSkill': {
+					const result = await this.skillsService.createSkillTemplate(message.name || 'Custom Skill', message.description || '');
+					if (result.success && result.filePath) {
+						const skills = await this.skillsService.getSkills();
+						this._view?.webview.postMessage({
+							type: 'updateSkills',
+							skills
+						});
+						vscode.window.showInformationMessage(`Created skill template: ${path.basename(result.filePath)}`);
+						try {
+							const doc = await vscode.workspace.openTextDocument(result.filePath);
+							await vscode.window.showTextDocument(doc);
+						} catch {}
+					} else {
+						vscode.window.showErrorMessage(`Could not create skill: ${result.error}`);
+					}
 					break;
 				}
 			}
@@ -337,6 +412,7 @@ export class ArduinoChatViewProvider extends Disposable implements vscode.Webvie
 		const session = GitHubDeviceFlowAuth.getInstance().getCurrentSession();
 		const signedIn = !!session;
 		const authLabel = signedIn ? `👤 ${session!.account.label}` : '🔑 Sign In';
+		const selectedModel = this.copilotApiService.getSelectedModel();
 
 		return `<!DOCTYPE html>
 <html lang="en">
@@ -351,6 +427,21 @@ export class ArduinoChatViewProvider extends Disposable implements vscode.Webvie
 		<div class="board-info">
 			<span class="board-chip" id="active-board-chip" title="Click to switch or select target board">${board.name}</span>
 			<span class="port-chip" id="active-port-chip">${port}</span>
+			<div class="model-picker-container" id="model-picker-container">
+				<button class="model-chip" id="model-selector-btn" title="Click to switch AI Model">
+					<span id="active-model-icon">⚡</span>
+					<span id="active-model-name">${selectedModel}</span>
+					<span class="dropdown-arrow">▾</span>
+				</button>
+				<div class="model-dropdown-menu" id="model-dropdown-menu">
+					<!-- Dynamically populated from JS -->
+				</div>
+			</div>
+			<button class="skills-chip" id="skills-btn" title="View & Configure Agent Skills">
+				<span>🧠</span>
+				<span id="skills-count-label">Skills</span>
+				<span class="dropdown-arrow">▾</span>
+			</button>
 			<button class="auth-chip ${signedIn ? 'signed-in' : ''}" id="auth-btn" title="GitHub Account Status">
 				<span id="auth-label">${authLabel}</span>
 			</button>
@@ -380,6 +471,27 @@ export class ArduinoChatViewProvider extends Disposable implements vscode.Webvie
 		<div class="input-box-wrapper">
 			<textarea id="chat-input" rows="1" placeholder="Ask Arduino Copilot... (Enter to send)"></textarea>
 			<button class="send-btn" id="send-btn" title="Send">➤</button>
+		</div>
+	</div>
+
+	<!-- Skills Modal Drawer -->
+	<div class="skills-modal-backdrop" id="skills-modal-backdrop">
+		<div class="skills-modal" id="skills-modal">
+			<div class="skills-modal-header">
+				<div class="skills-modal-title">
+					<span>🧠 Agent Skills & Hardware Rules</span>
+				</div>
+				<button class="skills-modal-close-btn" id="close-skills-btn" title="Close">✕</button>
+			</div>
+			<div class="skills-modal-desc">
+				Skills instruct Copilot with specialized embedded rules and pinout guidance. Toggle active skills or add your own custom skill files in <code>.skills/</code>.
+			</div>
+			<div class="skills-list" id="skills-list">
+				<!-- Dynamically populated from JS -->
+			</div>
+			<div class="skills-modal-footer">
+				<button class="btn-new-skill" id="new-skill-btn">➕ New Custom Skill</button>
+			</div>
 		</div>
 	</div>
 

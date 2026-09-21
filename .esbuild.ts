@@ -213,6 +213,33 @@ const nodeExtHostBuildOptions = {
 // Polyfill VS Code proposed APIs and enums for Arduino IDE / Theia compatibility
 (function() {
 	try {
+		if (typeof globalThis !== 'undefined') {
+			if (!globalThis.performance) {
+				globalThis.performance = {};
+			}
+			if (typeof globalThis.performance.now !== 'function') {
+				globalThis.performance.now = () => Date.now();
+			}
+			if (typeof globalThis.performance.mark !== 'function') {
+				const _marks = new Map();
+				globalThis.performance.mark = (name, opts) => {
+					const start = opts?.startTime ?? globalThis.performance.now();
+					const entry = { name, entryType: 'mark', startTime: start, duration: 0 };
+					_marks.set(name, entry);
+					return entry;
+				};
+				globalThis.performance.getEntries = () => Array.from(_marks.values());
+				globalThis.performance.getEntriesByType = (t) => t === 'mark' ? Array.from(_marks.values()) : [];
+				globalThis.performance.getEntriesByName = (n) => _marks.has(n) ? [_marks.get(n)] : [];
+				globalThis.performance.clearMarks = (n) => { if (n) _marks.delete(n); else _marks.clear(); };
+				if (typeof globalThis.performance.measure !== 'function') {
+					globalThis.performance.measure = () => ({});
+				}
+				if (typeof globalThis.performance.clearMeasures !== 'function') {
+					globalThis.performance.clearMeasures = () => {};
+				}
+			}
+		}
 		const _vsc = require('vscode');
 		if (_vsc) {
 			if (!_vsc.ChatEditingSessionActionOutcome) {
